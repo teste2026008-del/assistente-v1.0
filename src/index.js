@@ -4,7 +4,7 @@ export default {
   const headers = { "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store", "Access-Control-Allow-Origin":url.origin, "Access-Control-Allow-Methods":"GET, POST, OPTIONS", "Access-Control-Allow-Headers":"Content-Type" };
   if (url.pathname.startsWith("/api/")) {
    if (request.method === "OPTIONS") return new Response(null,{headers});
-   if (url.pathname === "/api/health") return Response.json({ok:true,service:"Sexta-Feira",aiAvailable:!!env.AI,elevenLabsAvailable:!!env.ELEVENLABS_API_KEY,voiceId:"GM2UA3fbsIaLHcswCDX9"},{headers});
+   if (url.pathname === "/api/health") return Response.json({ok:true,service:"Sexta-Feira",aiAvailable:!!env.AI,elevenLabsAvailable:!!env.ELEVENLABS_API_KEY,voiceId:"pNInz6obpgDQGcFmaJgB"},{headers});
    if (request.method !== "POST") return Response.json({error:"Use POST para este endpoint."},{status:405,headers});
    if (url.pathname === "/api/tts") {
     if (!env.ELEVENLABS_API_KEY) return Response.json({error:"A chave ELEVENLABS_API_KEY não está configurada como Secret no Worker."},{status:503,headers});
@@ -13,7 +13,7 @@ export default {
      const text = typeof body.text === "string" ? body.text.trim() : "";
      if (!text) return Response.json({error:"Texto vazio para gerar a voz."},{status:400,headers});
      if (text.length > 4500) return Response.json({error:"O texto para voz excede o limite de 4.500 caracteres."},{status:413,headers});
-     const response = await fetch("https://api.elevenlabs.io/v1/text-to-speech/GM2UA3fbsIaLHcswCDX9?output_format=mp3_44100_128", {
+     const response = await fetch("https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB?output_format=mp3_44100_128", {
       method:"POST",
       headers:{"xi-api-key":env.ELEVENLABS_API_KEY,"Content-Type":"application/json","Accept":"audio/mpeg"},
       body:JSON.stringify({text,model_id:"eleven_multilingual_v2",voice_settings:{stability:0.48,similarity_boost:0.82,style:0.25,use_speaker_boost:true}})
