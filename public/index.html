@@ -25,44 +25,14 @@ function normalizeSpeech(s){return s.toLocaleLowerCase('pt-BR').normalize('NFD')
 function startWakeListening(){
  if(!wakeEnabled||busy||speechPlaying||listening)return;
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SR){wakeEnabled=false;$('hint').textContent='Este navegador não oferece reconhecimento de voz compatível. Permita o microfone e tente novamente.';setState('SISTEMA PRONTO');return}
+ if(!SR){wakeEnabled=false;$('hint').textContent='Este navegador não oferece reconhecimento de voz compatível. O microfone pode estar liberado, mas o reconhecimento não está disponível.';setState('SISTEMA PRONTO');return}
  recognition=new SR();recognition.lang='pt-BR';recognition.interimResults=true;recognition.continuous=true;recognition.maxAlternatives=1;
- let handled=false;
- recognition.onstart=()=>{listening=true;$('mic').classList.add('active');$('mic').innerHTML='● <span class="mic-label">ESCUTANDO</span>';$('hint').textContent=awaitingCommand?'ESCUTANDO SUA MENSAGEM • SEXTA-FEIRA':'DIGA BOM DIA, BOA TARDE OU BOA NOITE, SEXTA-FEIRA';setState(awaitingCommand?'OUVINDO SUA MENSAGEM':'AGUARDANDO SEXTA-FEIRA')};
- recognition.onresult=e=>{
-  let interim='';
-  for(let i=e.resultIndex;i<e.results.length;i++){
-   const raw=e.results[i][0].transcript.trim();
-   if(!e.results[i].isFinal){interim+=raw+' ';continue}
-   if(handled)continue;
-   const clean=normalizeSpeech(raw);
-   const wake=clean.match(/\b(bom dia|boa tarde|boa noite|ola|oi)\s+sexta feira\b/);
-   if(wake){
-    handled=true;
-    const greeting=wake[0];
-    const rest=clean.slice(wake.index+wake[0].length).trim();
-    awaitingCommand=!rest;
-    if(rest) { $('prompt').value=rest; }
-    try{recognition.stop()}catch{}
-    send(rest?rest:greeting);
-   } else if(awaitingCommand&&clean){
-    handled=true;awaitingCommand=false;
-    try{recognition.stop()}catch{}
-    send(raw);
-   }
-  }
-  if(interim.trim()){$('prompt').value=interim.trim();showLast('VOCÊ',interim.trim())}
- };
- recognition.onerror=e=>{
-  if(e.error==='not-allowed'||e.error==='service-not-allowed'){wakeEnabled=false;$('hint').textContent='Permissão do microfone bloqueada. Clique no cadeado ao lado do endereço e permita o microfone.'}
-  else if(e.error!=='no-speech'&&e.error!=='aborted')$('hint').textContent='Reconhecimento de voz: '+e.error;
- };
- recognition.onend=()=>{
-  listening=false;$('mic').classList.remove('active');$('mic').innerHTML='🎙 <span class="mic-label">ATIVAR VOZ</span>';
-  if(wakeEnabled&&!busy&&!speechPlaying){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,500)}
-  else if(!wakeEnabled)setState('SISTEMA PRONTO');
- };
- try{recognition.start()}catch(e){listening=false;clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(wakeEnabled&&!listening)startWakeListening()},900)}
+ let handled=false,fatalError=false,startupTimer=null;
+ recognition.onstart=()=>{clearTimeout(startupTimer);listening=true;$('mic').classList.add('active');$('mic').innerHTML='● <span class="mic-label">ESCUTANDO</span>';$('hint').textContent=awaitingCommand?'ESCUTANDO SUA MENSAGEM • SEXTA-FEIRA':'DIGA BOM DIA, BOA TARDE OU BOA NOITE, SEXTA-FEIRA';setState(awaitingCommand?'OUVINDO SUA MENSAGEM':'AGUARDANDO SEXTA-FEIRA')};
+ recognition.onresult=e=>{let interim='';for(let i=e.resultIndex;i<e.results.length;i++){const raw=e.results[i][0].transcript.trim();if(!e.results[i].isFinal){interim+=raw+' ';continue}if(handled)continue;const clean=normalizeSpeech(raw);const wake=clean.match(/\b(bom dia|boa tarde|boa noite|ola|oi)\s+sexta feira\b/);if(wake){handled=true;const greeting=wake[0],rest=clean.slice(wake.index+wake[0].length).trim();awaitingCommand=!rest;if(rest)$('prompt').value=rest;try{recognition.stop()}catch{}send(rest?rest:greeting)}else if(awaitingCommand&&clean){handled=true;awaitingCommand=false;try{recognition.stop()}catch{}send(raw)}}if(interim.trim()){$('prompt').value=interim.trim();showLast('VOCÊ',interim.trim())}};
+ recognition.onerror=e=>{const errors={'not-allowed':'O reconhecimento de voz foi bloqueado pelo Opera GX. Confira a permissão do microfone para o site.','service-not-allowed':'O Opera GX bloqueou o serviço de reconhecimento de voz. O microfone está liberado, mas o reconhecimento do navegador não.','network':'O serviço de reconhecimento de voz não conseguiu conectar à rede. Verifique a conexão e tente novamente.','audio-capture':'O navegador não conseguiu capturar o áudio do microfone. Confira as configurações de entrada do Windows.','language-not-supported':'O reconhecimento de voz deste navegador não oferece português brasileiro.','bad-grammar':'O reconhecimento de voz do navegador rejeitou a configuração de idioma.'};if(errors[e.error]){fatalError=true;wakeEnabled=false;clearTimeout(startupTimer);clearTimeout(restartTimer);$('hint').textContent=errors[e.error]+' (Código: '+e.error+')';setState('ERRO NO RECONHECIMENTO')}else if(e.error!=='no-speech'&&e.error!=='aborted'){$('hint').textContent='Erro no reconhecimento de voz: '+e.error}};
+ recognition.onend=()=>{clearTimeout(startupTimer);listening=false;$('mic').classList.remove('active');$('mic').innerHTML='🎙 <span class="mic-label">ATIVAR VOZ</span>';if(wakeEnabled&&!fatalError&&!busy&&!speechPlaying){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,700)}else if(!wakeEnabled&&!fatalError)setState('SISTEMA PRONTO')};
+ try{recognition.start();startupTimer=setTimeout(()=>{if(wakeEnabled&&!listening){fatalError=true;wakeEnabled=false;try{recognition.stop()}catch{}$('hint').textContent='O microfone está liberado, mas o Opera GX não iniciou o reconhecimento de voz. Isso é uma limitação/erro do serviço de voz do navegador, não da permissão do microfone.';setState('ERRO NO RECONHECIMENTO')}},6000)}catch(e){fatalError=true;wakeEnabled=false;$('hint').textContent='O Opera GX não conseguiu iniciar o reconhecimento de voz: '+(e.message||e.name||'erro desconhecido');setState('ERRO NO RECONHECIMENTO')}
 }
 async function activateVoice(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
