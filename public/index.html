@@ -59,4 +59,4 @@ $('mic').addEventListener('click',()=>{
  activateVoice();
 });
 $('stop').addEventListener('click',()=>{wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening)recognition.stop();speechPlaying=false;if('speechSynthesis'in window)window.speechSynthesis.cancel();if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}currentUtterance=null;setState('SISTEMA PRONTO');$('hint').textContent='ESCUTA PARADA';});$('historyToggle').addEventListener('click',()=>$('history').classList.toggle('open'));
-</script><script type="module" src="/local-whisper.js"></script></body></html>
+</script><script type="module" src="https://raw.githubusercontent.com/teste2026008-del/assistente-v1.0/main/public/local-whisper.js"></script></body></html>
