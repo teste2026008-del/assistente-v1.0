@@ -14,11 +14,11 @@ export default {
     const message = typeof body.message === "string" ? body.message.trim() : "";
     if (!message) return Response.json({error:"Digite ou fale uma mensagem."},{status:400,headers});
     if (message.length > 8000) return Response.json({error:"A mensagem passou do limite de 8.000 caracteres."},{status:413,headers});
-    const result = await env.AI.run("@cf/meta/llama-3.1-8b-instruct",{messages:[
+    const result = await env.AI.run("@cf/meta/llama-3.1-8b-fast-v2",{messages:[
       {role:"system",content:"Seu nome é Sexta-Feira, assistente pessoal inspirado em uma IA de ficção científica. Converse em português brasileiro natural, com tom amigável, humano, direto e informal. Responda ao que a pessoa perguntou, faça perguntas só quando necessário e não repita saudações sem motivo. Ajude com programação e projetos. Seja transparente: não afirme que acessou GitHub, Cloudflare ou arquivos sem integração real disponível. Nunca peça senhas, tokens ou chaves secretas."},
       {role:"user",content:message}
     ],max_tokens:700});
-    const reply = result?.response ?? result?.result?.response ?? result?.output_text;
+    const reply = result?.response ?? result?.result?.response ?? result?.output_text ?? result?.choices?.[0]?.message?.content;
     if (typeof reply !== "string" || !reply.trim()) return Response.json({error:"A IA foi chamada, mas não retornou texto. Confira o modelo e a cota de Workers AI."},{status:502,headers});
     return Response.json({reply:reply.trim()},{headers});
    } catch (err) {
