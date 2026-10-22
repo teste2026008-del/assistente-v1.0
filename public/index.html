@@ -64,11 +64,29 @@ function startWakeListening(){
  };
  try{recognition.start()}catch(e){listening=false;clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(wakeEnabled&&!listening)startWakeListening()},900)}
 }
-$('mic').addEventListener('click',()=>{
- if(wakeEnabled){wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening){try{recognition.stop()}catch{}}$('mic').classList.remove('active');$('mic').textContent='🎙';$('hint').textContent='ESCUTA DESATIVADA • NÃO INFORME SENHAS OU TOKENS';setState('SISTEMA PRONTO');return}
+async function activateVoice(){
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SR){$('hint').textContent='O reconhecimento de voz não está disponível neste navegador. Atualize o Opera GX e permita o microfone.';return}
- wakeEnabled=true;awaitingCommand=false;$('hint').textContent='Solicitando acesso ao microfone…';startWakeListening();
+ if(!SR){$('hint').textContent='O Opera GX não disponibilizou reconhecimento de voz. Atualize o navegador e tente novamente.';setState('SISTEMA PRONTO');return}
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('hint').textContent='O navegador não permite abrir o microfone nesta página. Confira as permissões do site no Opera GX.';setState('SISTEMA PRONTO');return}
+ $('hint').textContent='Solicitando permissão real para usar o microfone…';
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  stream.getTracks().forEach(track=>track.stop());
+  wakeEnabled=true;awaitingCommand=false;
+  $('hint').textContent='Microfone liberado. Iniciando reconhecimento de voz…';
+  startWakeListening();
+  clearTimeout(restartTimer);
+  restartTimer=setTimeout(()=>{if(wakeEnabled&&!listening){$('hint').textContent='O microfone foi liberado, mas o reconhecimento de voz não iniciou. Confira se o Opera GX permite reconhecimento de voz.';setState('ERRO NO RECONHECIMENTO')}},5000);
+ }catch(e){
+  wakeEnabled=false;
+  const messages={NotAllowedError:'O Opera bloqueou a permissão do microfone. Libere o microfone nas configurações do site e confira também a permissão do Windows.',NotFoundError:'Não encontrei um microfone conectado ou habilitado no Windows.',NotReadableError:'O microfone está ocupado por outro aplicativo ou bloqueado pelo Windows.'};
+  $('hint').textContent=messages[e.name]||('Não consegui abrir o microfone: '+(e.message||e.name));
+  setState('SISTEMA PRONTO');
+ }
+}
+$('mic').addEventListener('click',()=>{
+ if(wakeEnabled){wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening){try{recognition.stop()}catch{}}$('mic').classList.remove('active');$('mic').innerHTML='🎙 <span class="mic-label">ATIVAR VOZ</span>';$('hint').textContent='ESCUTA DESATIVADA • NÃO INFORME SENHAS OU TOKENS';setState('SISTEMA PRONTO');return}
+ activateVoice();
 });
 $('stop').addEventListener('click',()=>{wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening)recognition.stop();speechPlaying=false;if('speechSynthesis'in window)window.speechSynthesis.cancel();if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}currentUtterance=null;setState('SISTEMA PRONTO');$('hint').textContent='ESCUTA PARADA';});$('historyToggle').addEventListener('click',()=>$('history').classList.toggle('open'));
 </script></body></html>
