@@ -1,4 +1,4 @@
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2';
+import { pipeline, env } from 'https://esm.sh/@huggingface/transformers@3.7.2?bundle';
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
