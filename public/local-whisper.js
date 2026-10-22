@@ -50,5 +50,10 @@ async function start() {
   if(typeof window.setState==='function')window.setState('AGUARDANDO SEXTA-FEIRA');
  } catch(e){stop();$('hint').textContent='Não consegui iniciar a voz local: '+(e.message||e.name||'erro');if(typeof window.setState==='function')window.setState('ERRO NO RECONHECIMENTO')}
 }
+window.startLocalWhisper=start;
 window.stopLocalWhisper=startStop;
+window.localWakeSend = text => { if (typeof window.send === 'function') window.send(text); };
+window.setState = window.setState || (s => { const el=$('status'); if(el)el.textContent=s; });
 function startStop(){stop();$('mic').classList.remove('active');$('mic').innerHTML='🎙 <span class="mic-label">ATIVAR VOZ</span>'}
+$('mic').addEventListener('click', e=>{e.preventDefault();e.stopImmediatePropagation();if(active){startStop();$('hint').textContent='ESCUTA DESATIVADA';return;}start();}, true);
+$('stop').addEventListener('click', e=>{if(active){e.preventDefault();e.stopImmediatePropagation();startStop();$('hint').textContent='ESCUTA PARADA';}}, true);
