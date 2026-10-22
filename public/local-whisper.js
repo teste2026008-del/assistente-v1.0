@@ -1,78 +1,210 @@
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2';
 env.allowLocalModels = false;
-let asr = null, stream = null, ctx = null, source = null, processor = null;
-let active = false, busy = false, pending = [], count = 0;
+env.useBrowserCache = true;
+
 const $ = id => document.getElementById(id);
-const norm = s => String(s || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
-function stop() {
- active = false;
- try { processor?.disconnect(); source?.disconnect(); stream?.getTracks().forEach(t=>t.stop()); if(ctx && ctx.state !== 'closed') ctx.close(); } catch {}
- processor = source = stream = ctx = null;
- window.localWhisperRunning = false;
+let asr = null, stream = null, audioContext = null, source = null, processor = null;
+let active = false, loading = false, transcribing = false, pending = [], sampleCount = 0;
+let session = 0;
+
+const normalize = value => String(value || '')
+  .toLocaleLowerCase('pt-BR')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+function state(value) {
+  if (typeof window.setState === 'function') window.setState(value);
+  else if ($('status')) $('status').textContent = value;
 }
-function resample(a, from, to) {
- if(from===to)return a;
- const n=Math.floor(a.length*to/from), out=new Float32Array(n), ratio=from/to;
- for(let i=0;i<n;i++){const p=i*ratio,l=Math.floor(p),f=p-l;out[i]=(a[l]||0)*(1-f)+(a[Math.min(l+1,a.length-1)]||0)*f}
- return out;
+
+function stopLocal() {
+  active = false;
+  session++;
+  try { processor?.disconnect(); } catch {}
+  try { source?.disconnect(); } catch {}
+  try { stream?.getTracks().forEach(track => track.stop()); } catch {}
+  try { if (audioContext && audioContext.state !== 'closed') audioContext.close(); } catch {}
+  processor = source = stream = audioContext = null;
+  pending = [];
+  sampleCount = 0;
+  window.localWhisperRunning = false;
+  $('mic')?.classList.remove('active');
+  if ($('mic')) $('mic').innerHTML = '🎙 <span class="mic-label">ATIVAR VOZ</span>';
 }
-async function deliver(text) {
- if (typeof window.send === 'function') return window.send(text);
- if (typeof window.localWakeSend === 'function') return window.localWakeSend(text);
- const input = $('prompt'), form = $('form');
- if (input && form) { input.value = text; form.requestSubmit(); }
-}
-async function transcribe(samples, rate) {
- if(busy||!active||!samples.length)return;
- busy=true;
- try {
-  const audio=resample(samples,rate,16000);
-  const result=await asr(audio,{sampling_rate:16000,language:'portuguese',task:'transcribe'});
-  const heard=String(result?.text||'').trim(), clean=norm(heard);
-  if(!heard||!active)return;
-  const wake=clean.match(/\b(bom dia|boa tarde|boa noite|ola|oi)\s+sexta feira\b/);
-  if(wake){
-   const rest=clean.slice(wake.index+wake[0].length).trim();
-   window.localWakeAwaiting=!rest;
-   await deliver(rest || wake[0]);
-  } else if(window.localWakeAwaiting) {
-   window.localWakeAwaiting=false;
-   await deliver(heard);
+
+function resample(input, fromRate, toRate) {
+  if (fromRate === toRate) return input;
+  const length = Math.floor(input.length * toRate / fromRate);
+  const output = new Float32Array(length);
+  const ratio = fromRate / toRate;
+  for (let i = 0; i < length; i++) {
+    const position = i * ratio;
+    const left = Math.floor(position);
+    const fraction = position - left;
+    const a = input[left] || 0;
+    const b = input[Math.min(left + 1, input.length - 1)] || 0;
+    output[i] = a * (1 - fraction) + b * fraction;
   }
- } catch(e) {
-  const hint=$('hint'); if(hint)hint.textContent='Erro no reconhecimento local: '+(e.message||'tente novamente');
- } finally {busy=false}
+  return output;
 }
-async function start() {
- if(window.localWhisperRunning)return;
- window.localWhisperRunning=true;active=true;window.localWakeAwaiting=false;
- const hint=$('hint');
- if(hint)hint.textContent='Preparando reconhecimento de voz gratuito. Primeira utilização: baixando modelo (~75–120 MB)…';
- try {
-  if(!asr) asr=await pipeline('automatic-speech-recognition','onnx-community/whisper-tiny',{device:'wasm',progress_callback:p=>{if(p?.status==='progress'&&p.progress!=null&&hint)hint.textContent='Baixando modelo de voz local: '+Math.round(p.progress)+'%'}});
-  if(!active)return;
-  stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
-  ctx=new AudioContext();await ctx.resume();source=ctx.createMediaStreamSource(stream);processor=ctx.createScriptProcessor(16384,1,1);
-  pending=[];count=0;
-  processor.onaudioprocess=e=>{
-   if(!active)return;
-   const a=e.inputBuffer.getChannelData(0);pending.push(new Float32Array(a));count+=a.length;
-   if(count>=ctx.sampleRate*5&&!busy){const all=new Float32Array(count);let pos=0;for(const part of pending){all.set(part,pos);pos+=part.length}pending=[];count=0;transcribe(all,ctx.sampleRate)}
-   e.outputBuffer.getChannelData(0).fill(0);
-  };
-  source.connect(processor);processor.connect(ctx.destination);
-  $('mic')?.classList.add('active');if($('mic'))$('mic').innerHTML='● <span class="mic-label">VOZ LOCAL</span>';
-  if(hint)hint.textContent='RECONHECIMENTO LOCAL GRATUITO ATIVO • DIGA “BOM DIA, SEXTA-FEIRA”';
-  if(typeof window.setState==='function')window.setState('AGUARDANDO SEXTA-FEIRA');
- } catch(e) {
-  stop();if(hint)hint.textContent='Não consegui iniciar a voz local: '+(e.message||e.name||'erro');
-  if(typeof window.setState==='function')window.setState('ERRO NO RECONHECIMENTO');
- }
+
+async function deliver(text) {
+  const message = String(text || '').trim();
+  if (!message) return;
+  if (typeof window.send === 'function') return window.send(message);
+  const input = $('prompt');
+  const form = $('form');
+  if (input && form) {
+    input.value = message;
+    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  }
 }
-function startStop(){stop();$('mic')?.classList.remove('active');if($('mic'))$('mic').innerHTML='🎙 <span class="mic-label">ATIVAR VOZ</span>'}
-window.startLocalWhisper=start;
-window.stopLocalWhisper=startStop;
-window.localWakeSend = text => deliver(text);
-window.setState = window.setState || (s => { const el=$('status'); if(el)el.textContent=s; });
-$('mic')?.addEventListener('click', e=>{e.preventDefault();e.stopImmediatePropagation();if(active){startStop();if($('hint'))$('hint').textContent='ESCUTA DESATIVADA';return;}start();}, true);
-$('stop')?.addEventListener('click', e=>{if(active){e.preventDefault();e.stopImmediatePropagation();startStop();if($('hint'))$('hint').textContent='ESCUTA PARADA';}}, true);
+
+async function transcribe(samples, rate, thisSession) {
+  if (transcribing || !active || !asr || !samples.length) return;
+  transcribing = true;
+  try {
+    const audio = resample(samples, rate, 16000);
+    const result = await asr(audio, {
+      sampling_rate: 16000,
+      language: 'portuguese',
+      task: 'transcribe',
+      chunk_length_s: 20,
+      stride_length_s: 4
+    });
+    if (!active || thisSession !== session) return;
+    const heard = String(result?.text || '').trim();
+    const clean = normalize(heard);
+    const hint = $('hint');
+    if (heard && hint) hint.textContent = 'OUVI: “' + heard + '”';
+
+    if (!clean) return;
+    const wake = clean.match(/\b(bom dia|boa tarde|boa noite|ola|oi)\s+sexta feira\b/);
+    if (wake) {
+      const rest = clean.slice(wake.index + wake[0].length).trim();
+      window.localWakeAwaiting = !rest;
+      await deliver(rest || wake[0]);
+    } else if (window.localWakeAwaiting) {
+      window.localWakeAwaiting = false;
+      await deliver(heard);
+    }
+  } catch (error) {
+    if (active && thisSession === session) {
+      const hint = $('hint');
+      if (hint) hint.textContent = 'Erro no Whisper local: ' + (error?.message || String(error));
+      state('ERRO NO RECONHECIMENTO LOCAL');
+    }
+  } finally {
+    transcribing = false;
+  }
+}
+
+async function startLocal() {
+  if (active || loading) return;
+  loading = true;
+  active = true;
+  window.localWhisperRunning = true;
+  window.localWakeAwaiting = false;
+  const thisSession = ++session;
+  const hint = $('hint');
+
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Este navegador não disponibilizou getUserMedia. Abra o site por HTTPS e confira o acesso ao microfone.');
+    }
+
+    if (hint) hint.textContent = 'Abrindo microfone…';
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+    if (!active || thisSession !== session) return;
+
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) throw new Error('Este navegador não oferece suporte ao processamento de áudio.');
+    audioContext = new AudioContextClass();
+    await audioContext.resume();
+    source = audioContext.createMediaStreamSource(stream);
+    processor = audioContext.createScriptProcessor(16384, 1, 1);
+    pending = [];
+    sampleCount = 0;
+
+    processor.onaudioprocess = event => {
+      if (!active || thisSession !== session) return;
+      const channel = event.inputBuffer.getChannelData(0);
+      pending.push(new Float32Array(channel));
+      sampleCount += channel.length;
+      if (sampleCount >= audioContext.sampleRate * 5 && !transcribing) {
+        const combined = new Float32Array(sampleCount);
+        let offset = 0;
+        for (const part of pending) { combined.set(part, offset); offset += part.length; }
+        pending = [];
+        sampleCount = 0;
+        transcribe(combined, audioContext.sampleRate, thisSession);
+      }
+      event.outputBuffer.getChannelData(0).fill(0);
+    };
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    if (hint) hint.textContent = 'Microfone ativo. Carregando reconhecimento local gratuito; na primeira vez pode demorar…';
+    state('CARREGANDO WHISPER LOCAL');
+
+    if (!asr) {
+      asr = await pipeline(
+        'automatic-speech-recognition',
+        'onnx-community/whisper-tiny',
+        {
+          device: 'wasm',
+          progress_callback: progress => {
+            if (!active || thisSession !== session || !hint) return;
+            if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
+              hint.textContent = 'Baixando modelo Whisper local: ' + Math.round(progress.progress) + '%';
+            } else if (progress?.status === 'download') {
+              hint.textContent = 'Baixando arquivos do modelo Whisper local…';
+            }
+          }
+        }
+      );
+    }
+    if (!active || thisSession !== session) return;
+    $('mic')?.classList.add('active');
+    if ($('mic')) $('mic').innerHTML = '● <span class="mic-label">VOZ LOCAL ATIVA</span>';
+    if (hint) hint.textContent = 'RECONHECIMENTO LOCAL GRATUITO ATIVO • DIGA “BOM DIA, SEXTA-FEIRA”';
+    state('AGUARDANDO SEXTA-FEIRA');
+  } catch (error) {
+    stopLocal();
+    const hint = $('hint');
+    if (hint) hint.textContent = 'Não consegui iniciar a voz local: ' + (error?.message || error?.name || String(error));
+    state('ERRO NO RECONHECIMENTO');
+  } finally {
+    loading = false;
+  }
+}
+
+function stopByUser() {
+  stopLocal();
+  if ($('hint')) $('hint').textContent = 'ESCUTA DESATIVADA';
+  state('SISTEMA PRONTO');
+}
+
+window.startLocalWhisper = startLocal;
+window.stopLocalWhisper = stopByUser;
+window.localWakeSend = deliver;
+
+// Capture the click before the old browser-native recognition handler can run.
+$('mic')?.addEventListener('click', event => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (active) stopByUser();
+  else startLocal();
+}, true);
+
+$('stop')?.addEventListener('click', event => {
+  if (active) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    stopByUser();
+    if ($('hint')) $('hint').textContent = 'ESCUTA PARADA';
+  }
+}, true);
