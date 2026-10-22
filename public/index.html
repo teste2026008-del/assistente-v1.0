@@ -8,10 +8,10 @@ main{min-height:100svh;display:flex;flex-direction:column;align-items:center;jus
 </style></head><body>
 <header><div class="brand">ASSISTENTE <strong>V1.0</strong><small>INTELIGÊNCIA • SISTEMAS • VOZ</small></div><div class="state"><span class="led" id="led"></span><span id="status">SISTEMA PRONTO</span></div></header>
 <button class="historybtn" id="historyToggle" type="button">CONVERSA ↗</button><section class="history" id="history" aria-live="polite"></section>
-<main><div class="scene" id="scene" aria-label="Núcleo holográfico animado"><canvas id="particles"></canvas><div class="ring"></div><div class="ring r2"></div><div class="core"></div></div><div class="title"><h1>ESTOU À DISPOSIÇÃO</h1><p>Assistente pessoal • Português brasileiro</p></div><div class="transcript" id="transcript">Diga “Olá, Sexta-Feira” ou toque no microfone para começarmos.</div></main>
-<form class="controls" id="form"><div class="inputrow"><button class="mic" id="mic" type="button" title="Falar pelo microfone" aria-label="Falar">🎙</button><input id="prompt" autocomplete="off" placeholder="Fale comigo, ou escreva aqui..." aria-label="Mensagem para o assistente"><button class="send" id="send" type="submit">ENVIAR ↗</button><button id="stop" type="button" title="Parar áudio" aria-label="Parar áudio">■</button></div><div class="foot" id="hint">VOZ ATIVA • NÃO INFORME SENHAS OU TOKENS</div></form>
+<main><div class="scene" id="scene" aria-label="Núcleo holográfico animado"><canvas id="particles"></canvas><div class="ring"></div><div class="ring r2"></div><div class="core"></div></div><div class="title"><h1>ESTOU À DISPOSIÇÃO</h1><p>Assistente pessoal • Português brasileiro</p></div><div class="transcript" id="transcript">Toque no microfone uma vez e diga “Bom dia, Sexta-Feira”, “Boa tarde, Sexta-Feira” ou “Boa noite, Sexta-Feira”.</div></main>
+<form class="controls" id="form"><div class="inputrow"><button class="mic" id="mic" type="button" title="Ativar escuta da Sexta-Feira" aria-label="Ativar escuta">🎙</button><input id="prompt" autocomplete="off" placeholder="Fale comigo, ou escreva aqui..." aria-label="Mensagem para o assistente"><button class="send" id="send" type="submit">ENVIAR ↗</button><button id="stop" type="button" title="Parar áudio" aria-label="Parar áudio">■</button></div><div class="foot" id="hint">VOZ ATIVA • NÃO INFORME SENHAS OU TOKENS</div></form>
 <script>
-const $=id=>document.getElementById(id);let recognition=null,listening=false,busy=false;const canvas=$('particles'),ctx=canvas.getContext('2d');let dots=[];
+const $=id=>document.getElementById(id);let recognition=null,listening=false,busy=false,wakeEnabled=false,awaitingCommand=false,speechPlaying=false,restartTimer=null;const canvas=$('particles'),ctx=canvas.getContext('2d');let dots=[];
 function resize(){const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);dots=Array.from({length:100},()=>({a:Math.random()*Math.PI*2,r:.19+Math.random()*.36,s:.3+Math.random()*.9,z:Math.random()*2+.5,p:Math.random()*Math.PI*2}))}
 function draw(t){const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);for(const q of dots){q.a+=.0015*q.s;const pulse=$('scene').classList.contains('listening')?1.12:1,x=w/2+Math.cos(q.a+t*.00008*q.s)*w*q.r*.48*pulse,y=h/2+Math.sin(q.a*1.15+t*.00007*q.s)*h*q.r*.48*pulse;ctx.beginPath();ctx.fillStyle='rgba(112,231,255,'+(.18+.55*(.5+.5*Math.sin(t*.002+q.p)))+')';ctx.arc(x,y,q.z,0,Math.PI*2);ctx.fill()}requestAnimationFrame(draw)}
 new ResizeObserver(resize).observe(canvas);resize();requestAnimationFrame(draw);
@@ -19,8 +19,56 @@ function setState(s){$('status').textContent=s;$('led').style.background=s.inclu
 function bubble(who,text){const box=document.createElement('div'),b=document.createElement('b'),span=document.createElement('div');box.className='bubble';b.textContent=who;span.textContent=text;box.append(b,span);$('history').appendChild(box);$('history').scrollTop=$('history').scrollHeight}
 function showLast(who,text){$('transcript').replaceChildren();const d=document.createElement('div');d.className=who==='VOCÊ'?'userline':'answer';d.textContent=(who==='VOCÊ'?'Você: ':'Sexta-Feira: ')+text;$('transcript').appendChild(d)}
 function chooseVoice(){const vs=window.speechSynthesis.getVoices();const preferred=[/Google português do Brasil/i,/Microsoft Francisca/i,/Microsoft Thalita/i,/Microsoft Bruna/i,/Microsoft Raquel/i,/Microsoft Maria/i,/Microsoft Zira/i,/Microsoft Aria/i,/Luciana/i,/Camila/i,/Vitória/i,/female.*pt-BR/i];for(const pattern of preferred){const v=vs.find(x=>pattern.test(x.name+' '+x.lang));if(v)return v}return vs.find(x=>/^pt-BR/i.test(x.lang))||vs.find(x=>/^pt/i.test(x.lang))||null}
-let currentAudio=null;let currentUtterance=null;async function speak(text){try{window.speechSynthesis?.cancel();if(currentAudio){currentAudio.pause();currentAudio=null}setState('GERANDO VOZ FEMININA');$('hint').textContent='VOZ NEURAL FEMININA • PORTUGUÊS BRASILEIRO';const res=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});if(!res.ok){let d={};try{d=await res.json()}catch{}throw new Error([d.error,d.detail].filter(Boolean).join(' — ')||'Não foi possível gerar a voz feminina.')}const audioBlob=await res.blob();const audioUrl=URL.createObjectURL(audioBlob);currentAudio=new Audio(audioUrl);currentAudio.volume=0.45;currentAudio.onplay=()=>setState('FALANDO');currentAudio.onended=()=>{URL.revokeObjectURL(audioUrl);currentAudio=null;setState('SISTEMA PRONTO')};currentAudio.onerror=()=>{URL.revokeObjectURL(audioUrl);currentAudio=null;setState('ERRO NA VOZ');$('hint').textContent='Falha ao reproduzir o áudio.'};await currentAudio.play()}catch(e){setState('ERRO NA VOZ');$('hint').textContent=e.message||'Não foi possível gerar a voz feminina.'}}async function send(text){text=text.trim();if(!text||busy)return;busy=true;bubble('VOCÊ',text);showLast('VOCÊ',text);$('prompt').value='';$('send').disabled=true;setState('PENSANDO');try{const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error([data.error,data.detail].filter(Boolean).join(' — ')||'O serviço de IA não respondeu.');const answer=data.reply||'Não recebi uma resposta válida.';bubble('SEXTA-FEIRA',answer);showLast('SEXTA-FEIRA',answer);speak(answer)}catch(e){const msg=e.message||'Falha de conexão com o servidor.';$('hint').textContent='Erro ao responder: '+msg;bubble('SISTEMA',msg);showLast('SISTEMA',msg);setState('VERIFIQUE A CONEXÃO')}finally{busy=false;$('send').disabled=false}}
+let currentAudio=null;let currentUtterance=null;async function speak(text){try{speechPlaying=true;window.speechSynthesis?.cancel();if(currentAudio){currentAudio.pause();currentAudio=null}setState('GERANDO VOZ FEMININA');$('hint').textContent='VOZ NEURAL FEMININA • PORTUGUÊS BRASILEIRO';const res=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});if(!res.ok){let d={};try{d=await res.json()}catch{}throw new Error([d.error,d.detail].filter(Boolean).join(' — ')||'Não foi possível gerar a voz feminina.')}const audioBlob=await res.blob();const audioUrl=URL.createObjectURL(audioBlob);currentAudio=new Audio(audioUrl);currentAudio.volume=0.45;currentAudio.onplay=()=>setState('FALANDO');currentAudio.onended=()=>{URL.revokeObjectURL(audioUrl);currentAudio=null;speechPlaying=false;setState(wakeEnabled?'AGUARDANDO SEXTA-FEIRA':'SISTEMA PRONTO');if(wakeEnabled){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,650)}};currentAudio.onerror=()=>{URL.revokeObjectURL(audioUrl);currentAudio=null;setState('ERRO NA VOZ');$('hint').textContent='Falha ao reproduzir o áudio.'};await currentAudio.play()}catch(e){speechPlaying=false;setState('ERRO NA VOZ');$('hint').textContent=e.message||'Não foi possível gerar a voz feminina.';if(wakeEnabled){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,900)}}}async function send(text){text=text.trim();if(!text||busy)return;busy=true;bubble('VOCÊ',text);showLast('VOCÊ',text);$('prompt').value='';$('send').disabled=true;setState('PENSANDO');try{const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error([data.error,data.detail].filter(Boolean).join(' — ')||'O serviço de IA não respondeu.');const answer=data.reply||'Não recebi uma resposta válida.';bubble('SEXTA-FEIRA',answer);showLast('SEXTA-FEIRA',answer);speak(answer)}catch(e){const msg=e.message||'Falha de conexão com o servidor.';$('hint').textContent='Erro ao responder: '+msg;bubble('SISTEMA',msg);showLast('SISTEMA',msg);setState('VERIFIQUE A CONEXÃO')}finally{busy=false;$('send').disabled=false}}
 $('form').addEventListener('submit',e=>{e.preventDefault();send($('prompt').value)});
-$('mic').addEventListener('click',()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){$('hint').textContent='Reconhecimento de voz indisponível. Tente Chrome ou Edge atualizado.';return}if(listening&&recognition){recognition.stop();return}recognition=new SR();recognition.lang='pt-BR';recognition.interimResults=true;recognition.continuous=false;let finalText='';recognition.onstart=()=>{listening=true;$('mic').classList.add('active');$('mic').textContent='●';setState('OUVINDO VOCÊ')};recognition.onresult=e=>{let interim='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)finalText+=t+' ';else interim+=t}$('prompt').value=(finalText+interim).trim();if(interim)showLast('VOCÊ',interim)};recognition.onerror=e=>{$('hint').textContent='Microfone: '+e.error+'. Verifique a permissão do navegador.'};recognition.onend=()=>{listening=false;$('mic').classList.remove('active');$('mic').textContent='🎙';if(finalText.trim())send(finalText);else setState('SISTEMA PRONTO')};try{recognition.start()}catch{$('hint').textContent='Não foi possível iniciar o microfone. Tente novamente.'}});
-$('stop').addEventListener('click',()=>{if(recognition&&listening)recognition.stop();if('speechSynthesis'in window)window.speechSynthesis.cancel();if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}currentUtterance=null;setState('SISTEMA PRONTO')});$('historyToggle').addEventListener('click',()=>$('history').classList.toggle('open'));
+function normalizeSpeech(s){return s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/[^a-z0-9\\s]/g,' ').replace(/\\s+/g,' ').trim()}
+function startWakeListening(){
+ if(!wakeEnabled||busy||speechPlaying||listening)return;
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){wakeEnabled=false;$('hint').textContent='Este navegador não oferece reconhecimento de voz compatível. Permita o microfone e tente novamente.';setState('SISTEMA PRONTO');return}
+ recognition=new SR();recognition.lang='pt-BR';recognition.interimResults=true;recognition.continuous=true;recognition.maxAlternatives=1;
+ let handled=false;
+ recognition.onstart=()=>{listening=true;$('mic').classList.add('active');$('mic').textContent='●';$('hint').textContent=awaitingCommand?'ESCUTANDO SUA MENSAGEM • SEXTA-FEIRA':'DIGA BOM DIA, BOA TARDE OU BOA NOITE, SEXTA-FEIRA';setState(awaitingCommand?'OUVINDO SUA MENSAGEM':'AGUARDANDO SEXTA-FEIRA')};
+ recognition.onresult=e=>{
+  let interim='';
+  for(let i=e.resultIndex;i<e.results.length;i++){
+   const raw=e.results[i][0].transcript.trim();
+   if(!e.results[i].isFinal){interim+=raw+' ';continue}
+   if(handled)continue;
+   const clean=normalizeSpeech(raw);
+   const wake=clean.match(/\\b(bom dia|boa tarde|boa noite|ola|oi)\\s+sexta feira\\b/);
+   if(wake){
+    handled=true;
+    const greeting=wake[0];
+    const rest=clean.slice(wake.index+wake[0].length).trim();
+    awaitingCommand=!rest;
+    if(rest) { $('prompt').value=rest; }
+    try{recognition.stop()}catch{}
+    send(rest?rest:greeting);
+   } else if(awaitingCommand&&clean){
+    handled=true;awaitingCommand=false;
+    try{recognition.stop()}catch{}
+    send(raw);
+   }
+  }
+  if(interim.trim()){$('prompt').value=interim.trim();showLast('VOCÊ',interim.trim())}
+ };
+ recognition.onerror=e=>{
+  if(e.error==='not-allowed'||e.error==='service-not-allowed'){wakeEnabled=false;$('hint').textContent='Permissão do microfone bloqueada. Clique no cadeado ao lado do endereço e permita o microfone.'}
+  else if(e.error!=='no-speech'&&e.error!=='aborted')$('hint').textContent='Reconhecimento de voz: '+e.error;
+ };
+ recognition.onend=()=>{
+  listening=false;$('mic').classList.remove('active');$('mic').textContent='🎙';
+  if(wakeEnabled&&!busy&&!speechPlaying){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,500)}
+  else if(!wakeEnabled)setState('SISTEMA PRONTO');
+ };
+ try{recognition.start()}catch(e){listening=false;clearTimeout(restartTimer);restartTimer=setTimeout(()=>{if(wakeEnabled&&!listening)startWakeListening()},900)}
+}
+$('mic').addEventListener('click',()=>{
+ if(wakeEnabled){wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening){try{recognition.stop()}catch{}}$('mic').classList.remove('active');$('mic').textContent='🎙';$('hint').textContent='ESCUTA DESATIVADA • NÃO INFORME SENHAS OU TOKENS';setState('SISTEMA PRONTO');return}
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){$('hint').textContent='O reconhecimento de voz não está disponível neste navegador. Atualize o Opera GX e permita o microfone.';return}
+ wakeEnabled=true;awaitingCommand=false;$('hint').textContent='Solicitando acesso ao microfone…';startWakeListening();
+});
+$('stop').addEventListener('click',()=>{wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening)recognition.stop();speechPlaying=false;if('speechSynthesis'in window)window.speechSynthesis.cancel();if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}currentUtterance=null;setState('SISTEMA PRONTO');$('hint').textContent='ESCUTA PARADA';});$('historyToggle').addEventListener('click',()=>$('history').classList.toggle('open'));
 </script></body></html>
