@@ -34,7 +34,7 @@ def main():
         webview.create_window("Sexta-Feira", f"http://{HOST}:{PORT}",
                               width=1180, height=820, min_size=(360, 560),
                               text_select=True)
-        webview.start(debug=False, storage_path=str(WEBVIEW_DATA_DIR))
+        webview.start(debug=False, private_mode=False, storage_path=str(WEBVIEW_DATA_DIR))
     except Exception:
         logging.exception("Erro ao abrir a janela da Sexta-Feira")
         raise
