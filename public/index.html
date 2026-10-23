@@ -79,12 +79,14 @@ async function tryLocalAction(text){
    return prev[b.length];
  };
  const appAliases=[
-   {keys:['calculadora','calc','cauculadora','calculadoura','calculadora do windows','calculadora windows','calculadora do computador','minha calculadora'],name:'calculadora'},
+   {keys:['calculadora','calc','cauculadora','cauculadoura','calculadoura','calculadora do windows','calculadora windows','calculadora do computador','minha calculadora','a calculadora do windows','calculadora que ja ta instalada'],name:'calculadora'},
    {keys:['bloco de notas','notepad','bloco notas'],name:'bloco de notas'},
    {keys:['paint','mspaint'],name:'paint'},
-   {keys:['explorador de arquivos','explorador arquivos','explorer','pastas'],name:'explorador de arquivos'},
+   {keys:['explorador de arquivos','explorador arquivos','gerenciador de arquivos','gerenciador arquivos','explorer','file explorer','pastas','meus arquivos'],name:'explorador de arquivos'},
    {keys:['gerenciador de tarefas','task manager','taskmgr'],name:'gerenciador de tarefas'},
    {keys:['chrome','google chrome'],name:'chrome'},
+   {keys:['opera gx','navegador opera gx'],name:'opera'},
+   {keys:['navegador opera','opera browser'],name:'opera'},
    {keys:['edge','microsoft edge'],name:'edge'},
    {keys:['firefox'],name:'firefox'},{keys:['opera'],name:'opera'},
    {keys:['whatsapp'],name:'whatsapp'},{keys:['spotify'],name:'spotify'},
@@ -109,7 +111,7 @@ async function tryLocalAction(text){
        const k=norm(key);
        if(Math.abs(k.length-t.length)>2)continue;
        const distance=editDistance(t,k);
-       const allowed=Math.max(1,Math.floor(Math.min(t.length,k.length)*0.22));
+       const allowed=Math.max(1,Math.min(3,Math.floor(Math.min(t.length,k.length)*0.28)));
        if(distance<=allowed&&distance<bestDistance){best=item.name;bestDistance=distance}
      }
    }
