@@ -5,6 +5,7 @@ env.useBrowserCache = true;
 const $ = id => document.getElementById(id);
 let asr = null, stream = null, audioContext = null, source = null, processor = null;
 let active = false, loading = false, transcribing = false, pending = [], sampleCount = 0, lastRate = 0;
+let speechFrames = 0, peakRms = 0, commandCooldownUntil = 0;
 let session = 0;
 
 const normalize = value => String(value || '')
@@ -28,6 +29,9 @@ function stopLocal() {
   pending = [];
   sampleCount = 0;
   lastRate = 0;
+  speechFrames = 0;
+  peakRms = 0;
+  commandCooldownUntil = 0;
   transcribing = false;
   window.localWakeAwaiting = false;
   window.localWhisperRunning = false;
@@ -66,6 +70,9 @@ async function deliver(text) {
 
 async function transcribe(samples, rate, thisSession) {
   if (transcribing || !active || !asr || !samples.length) return;
+  // O microfone continua aberto, mas não transcrevemos silêncio/ruído nem o áudio
+  // que a própria Sexta-Feira está reproduzindo.
+  if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) return;
   transcribing = true;
   try {
     const audio = resample(samples, rate, 16000);
@@ -77,35 +84,51 @@ async function transcribe(samples, rate, thisSession) {
       stride_length_s: 4
     });
     if (!active || thisSession !== session) return;
+    // O estado pode ter mudado enquanto o modelo estava transcrevendo.
+    if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) return;
     const heard = String(result?.text || '').trim();
     const clean = normalize(heard);
     const hint = $('hint');
-    if (heard && hint) hint.textContent = 'RECONHECI: “' + heard + '”';
 
     if (!clean) return;
 
-    // O microfone é ativado manualmente pelo usuário: aceite comandos falados
-    // diretamente, sem exigir palavra de ativação. A palavra "Sexta-Feira"
-    // continua funcionando para chamar a assistente antes de dar o comando.
+    // O Whisper às vezes inventa frases a partir de silêncio, ruído ou áudio de fundo.
+    // Exigimos conteúdo mínimo e descartamos frases típicas de alucinação/legendas.
+    const words = clean.split(' ').filter(Boolean);
+    const hallucinations = [
+      'obrigado por assistir', 'obrigada por assistir', 'legendas pela comunidade',
+      'inscreva se no canal', 'se inscreva no canal', 'muito obrigado por assistir',
+      'thanks for watching', 'subscribe to the channel', 'amara org'
+    ];
+    if (words.length < 2 || clean.length < 5 || hallucinations.some(phrase => clean.includes(phrase))) {
+      if (hint) hint.textContent = 'OUVINDO • descartei áudio sem fala clara';
+      return;
+    }
+    if (hint) hint.textContent = 'RECONHECI: “' + heard + '”';
+
     const wake = clean.match(/\b(?:(?:bom dia|boa tarde|boa noite|ola|oi)\s+)?sexta\s*(?:feira|feir|fera)\b/);
+    let command = '';
     if (wake) {
-      const rest = clean.slice(wake.index + wake[0].length).trim();
-      if (rest) {
-        window.localWakeAwaiting = false;
-        await deliver(rest);
-      } else {
+      command = clean.slice(wake.index + wake[0].length).trim();
+      if (!command) {
         window.localWakeAwaiting = true;
         if (hint) hint.textContent = 'CHAMADA RECONHECIDA • FALE AGORA O COMANDO';
         state('OUVINDO COMANDO');
+        return;
       }
-    } else if (window.localWakeAwaiting) {
       window.localWakeAwaiting = false;
-      await deliver(heard);
+    } else if (window.localWakeAwaiting) {
+      command = heard;
+      window.localWakeAwaiting = false;
     } else {
-      // Como o usuário já clicou para ativar o microfone, envie a fala
-      // reconhecida mesmo quando o Whisper não capturar a palavra de ativação.
-      await deliver(heard);
+      // A fala comum é aceita, mas somente após o detector de atividade de voz
+      // confirmar som de fala e fora do período em que a assistente está respondendo.
+      command = heard;
     }
+
+    if (!command || window.localAssistantSpeaking || window.localAssistantBusy) return;
+    commandCooldownUntil = Date.now() + 4500;
+    await deliver(command);
   } catch (error) {
     if (active && thisSession === session) {
       const hint = $('hint');
@@ -145,22 +168,42 @@ async function startLocal() {
     processor = audioContext.createScriptProcessor(16384, 1, 1);
     pending = [];
     sampleCount = 0;
+    speechFrames = 0;
+    peakRms = 0;
 
     processor.onaudioprocess = event => {
       if (!active || thisSession !== session) return;
       const channel = event.inputBuffer.getChannelData(0);
-      if (!transcribing) {
+      // Medidor simples de atividade vocal por bloco. O limiar evita transcrever
+      // silêncio e boa parte dos ruídos baixos; o áudio integral do bloco é mantido
+      // para preservar o contexto da frase.
+      let sumSquares = 0, framePeak = 0;
+      for (let i = 0; i < channel.length; i++) {
+        const v = channel[i];
+        sumSquares += v * v;
+        const a = Math.abs(v);
+        if (a > framePeak) framePeak = a;
+      }
+      const rms = Math.sqrt(sumSquares / Math.max(1, channel.length));
+      if (!transcribing && !window.localAssistantSpeaking && !window.localAssistantBusy) {
         pending.push(new Float32Array(channel));
         sampleCount += channel.length;
         lastRate = audioContext.sampleRate;
+        if (rms >= 0.018 && framePeak >= 0.035) speechFrames++;
+        if (framePeak > peakRms) peakRms = framePeak;
       }
       if (sampleCount >= audioContext.sampleRate * 5 && !transcribing) {
         const combined = new Float32Array(sampleCount);
         let offset = 0;
         for (const part of pending) { combined.set(part, offset); offset += part.length; }
+        const hasVoice = speechFrames >= 2 && peakRms >= 0.045;
         pending = [];
         sampleCount = 0;
-        transcribe(combined, lastRate || audioContext.sampleRate, thisSession);
+        speechFrames = 0;
+        peakRms = 0;
+        if (hasVoice && !window.localAssistantSpeaking && !window.localAssistantBusy && Date.now() >= commandCooldownUntil) {
+          transcribe(combined, lastRate || audioContext.sampleRate, thisSession);
+        }
       }
       event.outputBuffer.getChannelData(0).fill(0);
     };
