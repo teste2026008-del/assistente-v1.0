@@ -80,11 +80,18 @@ async function transcribe(samples, rate, thisSession) {
     if (heard && hint) hint.textContent = 'OUVI: “' + heard + '”';
 
     if (!clean) return;
-    const wake = clean.match(/\b(bom dia|boa tarde|boa noite|ola|oi)\s+sexta feira\b/);
+    // Aceita tanto "Sexta-Feira" sozinho quanto "Bom dia, Sexta-Feira".
+    const wake = clean.match(/\b(?:(?:bom dia|boa tarde|boa noite|ola|oi)\s+)?sexta feira\b/);
     if (wake) {
       const rest = clean.slice(wake.index + wake[0].length).trim();
-      window.localWakeAwaiting = !rest;
-      await deliver(rest || wake[0]);
+      if (rest) {
+        window.localWakeAwaiting = false;
+        await deliver(rest);
+      } else {
+        // Se a pessoa disser apenas o nome, aguarda a próxima frase.
+        window.localWakeAwaiting = true;
+        if (hint) hint.textContent = 'ESTOU OUVINDO • PODE FALAR O QUE PRECISA';
+      }
     } else if (window.localWakeAwaiting) {
       window.localWakeAwaiting = false;
       await deliver(heard);
