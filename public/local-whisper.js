@@ -265,7 +265,7 @@ async function startLocal() {
         framePeak = Math.max(framePeak, Math.abs(value));
       }
       const rms = Math.sqrt(sumSquares / Math.max(1, channel.length));
-      const voiceNow = rms >= 0.010 && framePeak >= 0.025;
+      const voiceNow = rms >= 0.0065 && framePeak >= 0.018;
 
       if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) {
         pending = [];
@@ -315,7 +315,7 @@ async function startLocal() {
             combined.set(part, offset);
             offset += part.length;
           }
-          const hasVoice = speechFrames >= 4 && peakRms >= 0.025 && sampleCount >= audioContext.sampleRate * 0.45;
+          const hasVoice = speechFrames >= 3 && peakRms >= 0.018 && sampleCount >= audioContext.sampleRate * 0.38;
           pending = [];
           preRoll = [];
           sampleCount = 0;
