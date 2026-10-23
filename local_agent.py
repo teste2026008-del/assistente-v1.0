@@ -3,7 +3,7 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, quote_plus
-import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata
+import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio
 
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/"public"
@@ -54,13 +54,44 @@ class Handler(SimpleHTTPRequestHandler):
    try:data=json.loads(body or b"{}")
    except Exception:return self.send_json(400,{"error":"JSON inválido."})
    return self.action(data)
-  if p=="/api/tts": return self.proxy(p,body,"POST")
+  if p=="/api/tts": return self.local_tts(body)
   if p=="/api/memory":
    try:data=json.loads(body or b"{}")
    except Exception:return self.send_json(400,{"error":"JSON inválido."})
    return self.memory_save(data)
   if p.startswith("/api/"):return self.proxy(p,body,"POST")
   return self.send_json(404,{"error":"Rota não encontrada."})
+ def local_tts(self,body):
+  try:
+   data=json.loads(body or b"{}")
+  except Exception:
+   return self.send_json(400,{"error":"Pedido de voz inválido."})
+  text=str(data.get("text","")).strip()[:1800]
+  if not text:
+   return self.send_json(400,{"error":"Não recebi texto para falar."})
+  try:
+   import edge_tts
+  except ImportError:
+   return self.send_json(503,{"error":"O mecanismo de voz neural gratuito ainda está sendo instalado.","detail":"Feche e abra o aplicativo novamente para concluir a instalação."})
+  async def generate():
+   communicate=edge_tts.Communicate(text,voice="pt-BR-FranciscaNeural",rate="+0%",pitch="+0Hz")
+   chunks=[]
+   async for chunk in communicate.stream():
+    if chunk.get("type")=="audio":
+     chunks.append(chunk.get("data",b""))
+   return b"".join(chunks)
+  try:
+   audio=asyncio.run(generate())
+   if not audio:
+    return self.send_json(502,{"error":"O serviço gratuito de voz não retornou áudio.","detail":"Confira a conexão com a internet."})
+   self.send_response(200)
+   self.send_header("Content-Type","audio/mpeg")
+   self.send_header("Content-Length",str(len(audio)))
+   self.send_header("Cache-Control","no-store")
+   self.end_headers()
+   self.wfile.write(audio)
+  except Exception as e:
+   return self.send_json(502,{"error":"Não consegui gerar a voz neural gratuita.","detail":str(e)[:220]})
  def proxy(self,path,body,method):
   try:
    req=urllib.request.Request(WORKER+path,data=body if method=="POST" else None,method=method,headers={"Content-Type":"application/json","User-Agent":"Sexta-Feira-Local/1.0"})
