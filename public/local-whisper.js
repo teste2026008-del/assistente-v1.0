@@ -302,11 +302,11 @@ async function startLocal() {
         } else {
           // Buffer circular curto para preservar o começo da palavra sem acumular silêncio.
           preRoll.push(new Float32Array(channel));
-          if (preRoll.length > 4) preRoll.shift();
+          if (preRoll.length > 5) preRoll.shift();
         }
 
         // ~0,7 s de silêncio encerra a frase. O tamanho mínimo evita transcrever cliques.
-        const endedBySilence = capturingSpeech && speechFrames >= 4 && silenceFrames >= 8;
+        const endedBySilence = capturingSpeech && speechFrames >= 4 && silenceFrames >= 12;
         const reachedLimit = capturingSpeech && sampleCount >= audioContext.sampleRate * 12;
         if ((endedBySilence || reachedLimit) && !transcribing) {
           const combined = new Float32Array(sampleCount);
