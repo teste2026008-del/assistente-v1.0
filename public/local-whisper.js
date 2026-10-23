@@ -191,6 +191,13 @@ async function startLocal() {
         lastRate = audioContext.sampleRate;
         if (rms >= 0.018 && framePeak >= 0.035) speechFrames++;
         if (framePeak > peakRms) peakRms = framePeak;
+      } else if (!transcribing) {
+        // Descarta o bloco parcialmente capturado quando a assistente fala,
+        // para nunca misturar a voz sintetizada com a próxima pergunta.
+        pending = [];
+        sampleCount = 0;
+        speechFrames = 0;
+        peakRms = 0;
       }
       if (sampleCount >= audioContext.sampleRate * 5 && !transcribing) {
         const combined = new Float32Array(sampleCount);
