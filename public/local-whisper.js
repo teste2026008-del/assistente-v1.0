@@ -218,19 +218,19 @@ async function startLocal() {
     source.connect(processor);
     processor.connect(audioContext.destination);
 
-    if (hint) hint.textContent = asr ? 'Reutilizando o modelo de voz já carregado…' : 'Preparando o modelo de voz local; depois de baixado, será reutilizado pelo cache do aplicativo…';
+    if (hint) hint.textContent = asr ? 'Reutilizando o modelo de voz já carregado…' : 'Carregando o modelo leve de voz; o cache será reutilizado nas próximas aberturas…';
     state(asr ? 'REUTILIZANDO MODELO DE VOZ' : 'CARREGANDO MODELO DE VOZ');
 
     if (!asr) {
       asr = await pipeline(
         'automatic-speech-recognition',
-        'onnx-community/whisper-base',
+        'onnx-community/whisper-tiny',
         {
           device: 'wasm',
           progress_callback: progress => {
             if (!active || thisSession !== session || !hint) return;
             if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
-              hint.textContent = 'Preparando modelo de voz salvo no cache: ' + Math.round(progress.progress) + '%';
+              hint.textContent = 'Carregando modelo de voz do cache: ' + Math.round(progress.progress) + '%';
             } else if (progress?.status === 'download') {
               hint.textContent = 'Baixando o modelo de voz pela primeira vez. O cache local persistente será reutilizado nas próximas aberturas…';
             }
