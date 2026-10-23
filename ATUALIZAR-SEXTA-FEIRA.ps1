@@ -11,7 +11,8 @@ $Files = @(
   "desktop_app.py",
   "INICIAR-SEXTA-FEIRA.bat",
   "ABRIR-SEXTA-FEIRA.vbs",
-  "public/local-whisper.js"
+  "public/local-whisper.js",
+  "public/index.html"
 )
 New-Item -ItemType Directory -Path $Backup -Force | Out-Null
 foreach ($Relative in $Files) {
