@@ -14,9 +14,10 @@ Assistente de programação em português brasileiro, com interface de conversa,
 
 1. Baixe o ZIP pelo botão **Code → Download ZIP**.
 2. Instale Python 3.11+ e marque **Add Python to PATH**.
-3. Extraia o ZIP e execute `INICIAR-SEXTA-FEIRA.bat`.
-4. A interface abrirá em `http://127.0.0.1:8765`. Feche o terminal para encerrar.
-5. A IA e a voz continuam usando o Worker online. O Whisper pode baixar o modelo na primeira utilização.
+3. Extraia o ZIP e execute `ABRIR-SEXTA-FEIRA.vbs` para abrir a janela nativa sem deixar o terminal visível. Na primeira execução, o inicializador pode instalar o pacote pywebview.
+4. A janela nativa carrega a interface local em `http://127.0.0.1:8765`; não é necessário abrir uma aba externa.
+5. Para atualizar arquivos sem baixar outro ZIP, execute `ATUALIZAR-SEXTA-FEIRA.ps1` no PowerShell depois que o repositório estiver público. O script cria um backup antes de substituir os arquivos.
+6. O Whisper usa o cache do navegador/WebView quando disponível. Na primeira utilização, o modelo pode precisar ser baixado.
 
 Comandos locais: abrir navegador/link, pesquisar na web, abrir aplicativos básicos e pastas comuns, listar pastas, consultar informações do computador e status/histórico do Git, criar notas. Não executa comandos arbitrários nem ações destrutivas. Controle geral de mouse/teclado e integração autenticada para alterar projetos no GitHub/Cloudflare ainda exigem desenvolvimento e testes adicionais.
 
