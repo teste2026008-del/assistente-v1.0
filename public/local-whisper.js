@@ -7,6 +7,7 @@ const $ = id => document.getElementById(id);
 let asr = null, stream = null, audioContext = null, source = null, processor = null;
 let active = false, loading = false, transcribing = false, pending = [], sampleCount = 0, lastRate = 0;
 let speechFrames = 0, silenceFrames = 0, peakRms = 0, commandCooldownUntil = 0;
+let preRoll = [], capturingSpeech = false;
 let session = 0;
 let modelPromise = null;
 let permissionStatus = 'unknown';
@@ -35,6 +36,8 @@ function stopLocal() {
   speechFrames = 0;
   silenceFrames = 0;
   peakRms = 0;
+  preRoll = [];
+  capturingSpeech = false;
   commandCooldownUntil = 0;
   transcribing = false;
   window.localWakeAwaiting = false;
@@ -79,7 +82,23 @@ async function transcribe(samples, rate, thisSession) {
   if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) return;
   transcribing = true;
   try {
-    const audio = resample(samples, rate, 16000);
+    let audio = resample(samples, rate, 16000);
+    // Ajuste leve de volume para microfones baixos, sem amplificar ruído indefinidamente.
+    let sumSquares = 0, peak = 0;
+    for (let i = 0; i < audio.length; i++) {
+      const value = audio[i];
+      sumSquares += value * value;
+      peak = Math.max(peak, Math.abs(value));
+    }
+    const rms = Math.sqrt(sumSquares / Math.max(1, audio.length));
+    if (rms > 0.002 && rms < 0.12) {
+      const gain = Math.min(4, 0.12 / rms, peak > 0 ? 0.96 / peak : 4);
+      if (gain > 1.05) {
+        const boosted = new Float32Array(audio.length);
+        for (let i = 0; i < audio.length; i++) boosted[i] = Math.max(-0.98, Math.min(0.98, audio[i] * gain));
+        audio = boosted;
+      }
+    }
     const result = await asr(audio, {
       sampling_rate: 16000,
       language: 'portuguese',
@@ -214,56 +233,84 @@ async function startLocal() {
     audioContext = new AudioContextClass();
     await audioContext.resume();
     source = audioContext.createMediaStreamSource(stream);
-    processor = audioContext.createScriptProcessor(16384, 1, 1);
+    // Blocos menores reduzem a latência e deixam o detector de pausa mais preciso.
+    processor = audioContext.createScriptProcessor(4096, 1, 1);
     pending = [];
+    preRoll = [];
     sampleCount = 0;
     speechFrames = 0;
     silenceFrames = 0;
     peakRms = 0;
+    capturingSpeech = false;
 
     processor.onaudioprocess = event => {
       if (!active || thisSession !== session) return;
       const channel = event.inputBuffer.getChannelData(0);
-      // Medidor simples de atividade vocal por bloco. O limiar evita transcrever
-      // silêncio e boa parte dos ruídos baixos; o áudio integral do bloco é mantido
-      // para preservar o contexto da frase.
       let sumSquares = 0, framePeak = 0;
       for (let i = 0; i < channel.length; i++) {
-        const v = channel[i];
-        sumSquares += v * v;
-        const a = Math.abs(v);
-        if (a > framePeak) framePeak = a;
+        const value = channel[i];
+        sumSquares += value * value;
+        framePeak = Math.max(framePeak, Math.abs(value));
       }
       const rms = Math.sqrt(sumSquares / Math.max(1, channel.length));
-      if (!transcribing && !window.localAssistantSpeaking && !window.localAssistantBusy) {
-        pending.push(new Float32Array(channel));
-        sampleCount += channel.length;
-        lastRate = audioContext.sampleRate;
-        if (rms >= 0.018 && framePeak >= 0.035) speechFrames++;
-        if (framePeak > peakRms) peakRms = framePeak;
-      } else if (!transcribing) {
-        // Descarta o bloco parcialmente capturado quando a assistente fala,
-        // para nunca misturar a voz sintetizada com a próxima pergunta.
+      const voiceNow = rms >= 0.010 && framePeak >= 0.025;
+
+      if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) {
         pending = [];
+        preRoll = [];
         sampleCount = 0;
         speechFrames = 0;
+        silenceFrames = 0;
         peakRms = 0;
-      }
-      if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) {
-        pending = []; sampleCount = 0; speechFrames = 0; silenceFrames = 0; peakRms = 0;
-      } else {
-        const voiceNow = rms >= 0.008 && framePeak >= 0.022;
-        if (voiceNow) { speechFrames++; silenceFrames = 0; }
-        else if (speechFrames > 0) silenceFrames++;
-        // Envia a frase depois de uma pausa natural, em vez de cortar o comando a cada 5 s.
-        const endedBySilence = speechFrames >= 2 && silenceFrames >= 3;
-        const reachedLimit = sampleCount >= audioContext.sampleRate * 12;
+        capturingSpeech = false;
+      } else if (!transcribing) {
+        lastRate = audioContext.sampleRate;
+
+        if (voiceNow) {
+          if (!capturingSpeech) {
+            // Guarda só ~0,35 s antes da fala; nunca envia vários segundos de silêncio ao Whisper.
+            pending = preRoll.slice();
+            sampleCount = pending.reduce((total, part) => total + part.length, 0);
+            capturingSpeech = true;
+            speechFrames = 0;
+            silenceFrames = 0;
+            peakRms = 0;
+          }
+          const copy = new Float32Array(channel);
+          pending.push(copy);
+          sampleCount += copy.length;
+          speechFrames++;
+          silenceFrames = 0;
+          peakRms = Math.max(peakRms, framePeak);
+        } else if (capturingSpeech) {
+          const copy = new Float32Array(channel);
+          pending.push(copy);
+          sampleCount += copy.length;
+          silenceFrames++;
+        } else {
+          // Buffer circular curto para preservar o começo da palavra sem acumular silêncio.
+          preRoll.push(new Float32Array(channel));
+          if (preRoll.length > 4) preRoll.shift();
+        }
+
+        // ~0,7 s de silêncio encerra a frase. O tamanho mínimo evita transcrever cliques.
+        const endedBySilence = capturingSpeech && speechFrames >= 4 && silenceFrames >= 8;
+        const reachedLimit = capturingSpeech && sampleCount >= audioContext.sampleRate * 12;
         if ((endedBySilence || reachedLimit) && !transcribing) {
           const combined = new Float32Array(sampleCount);
           let offset = 0;
-          for (const part of pending) { combined.set(part, offset); offset += part.length; }
-          const hasVoice = speechFrames >= 2 && peakRms >= 0.025 && sampleCount >= audioContext.sampleRate * 1.0;
-          pending = []; sampleCount = 0; speechFrames = 0; silenceFrames = 0; peakRms = 0;
+          for (const part of pending) {
+            combined.set(part, offset);
+            offset += part.length;
+          }
+          const hasVoice = speechFrames >= 4 && peakRms >= 0.025 && sampleCount >= audioContext.sampleRate * 0.45;
+          pending = [];
+          preRoll = [];
+          sampleCount = 0;
+          speechFrames = 0;
+          silenceFrames = 0;
+          peakRms = 0;
+          capturingSpeech = false;
           if (hasVoice) transcribe(combined, lastRate || audioContext.sampleRate, thisSession);
         }
       }
