@@ -102,7 +102,10 @@ async function transcribe(samples, rate, thisSession) {
     const hallucinations = [
       'obrigado por assistir', 'obrigada por assistir', 'legendas pela comunidade',
       'inscreva se no canal', 'se inscreva no canal', 'muito obrigado por assistir',
-      'thanks for watching', 'subscribe to the channel', 'amara org'
+      'thanks for watching', 'subscribe to the channel', 'amara org',
+      'som de fundo', 'musica de fundo', 'estou ouvindo um som', 'estou ouvindo uma musica',
+      'nao consigo identificar', 'pode ser um som de agua', 'pode ser musica classica',
+      'som de agua vento', 'musica tocando ao fundo'
     ];
     if (words.length < 2 || clean.length < 5 || hallucinations.some(phrase => clean.includes(phrase))) {
       if (hint) hint.textContent = 'OUVINDO • descartei áudio sem fala clara';
@@ -110,7 +113,7 @@ async function transcribe(samples, rate, thisSession) {
     }
     if (hint) hint.textContent = 'RECONHECI: “' + heard + '”';
 
-    const wake = clean.match(/\b(?:(?:bom dia|boa tarde|boa noite|ola|oi)\s+)?sexta\s*(?:feira|feir|fera)\b/);
+    const wake = clean.match(/\b(?:(?:bom dia|boa tarde|boa noite|ola|oi)\s+)?(?:sexta\s*(?:feira|feir|fera|ver)|sexto\s*ver)\b/);
     let command = '';
     if (wake) {
       command = clean.slice(wake.index + wake[0].length).trim();
