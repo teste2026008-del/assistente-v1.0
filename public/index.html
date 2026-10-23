@@ -36,6 +36,7 @@ const contextualMessage=buildContextualMessage(text);if(localMode){memoryHistory
 $('form').addEventListener('submit',e=>{e.preventDefault();send($('prompt').value)});
 async function tryLocalAction(text){
  const s=text.trim();let action=null;let m;
+ if(/^(?:sexta-feira[, ]*)?(?:que horas são|que hora é|qual é a hora|que dia é hoje|qual a data de hoje|data e hora atual)[?.! ]*$/i.test(s))action={type:'current_time'};
  if(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir) (?:o )?navegador$/i.test(s))action={type:'open_browser'};
  else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir) (https?:\/\/\S+)$/i)))action={type:'open_url',url:m[1]};
  else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:pesquise|pesquisar|procure|buscar) (.+)$/i)))action={type:'web_search',query:m[1]};
