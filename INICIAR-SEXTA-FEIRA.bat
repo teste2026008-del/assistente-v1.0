@@ -9,9 +9,9 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-py -3 -c "import webview" >nul 2>nul
+py -3.12 -c "import webview" >nul 2>nul
 if errorlevel 1 (
-  py -3 -m pip install --user pywebview > "%LOG%" 2>&1
+  py -3.12 -m pip install --user pywebview > "%LOG%" 2>&1
   if errorlevel 1 (
     echo Nao consegui preparar a janela do aplicativo.
     echo Consulte o arquivo: "%LOG%"
@@ -21,8 +21,8 @@ if errorlevel 1 (
 )
 where pyw >nul 2>nul
 if errorlevel 1 (
-  start "" py -3w desktop_app.py
+  start "" py -3.12w desktop_app.py
 ) else (
-  start "" pyw -3 desktop_app.py
+  start "" pyw -3.12 desktop_app.py
 )
 endlocal
