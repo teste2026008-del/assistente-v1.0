@@ -4,7 +4,7 @@ env.useBrowserCache = true;
 
 const $ = id => document.getElementById(id);
 let asr = null, stream = null, audioContext = null, source = null, processor = null;
-let active = false, loading = false, transcribing = false, pending = [], sampleCount = 0;
+let active = false, loading = false, transcribing = false, pending = [], sampleCount = 0, lastRate = 0;
 let session = 0;
 
 const normalize = value => String(value || '')
@@ -27,6 +27,9 @@ function stopLocal() {
   processor = source = stream = audioContext = null;
   pending = [];
   sampleCount = 0;
+  lastRate = 0;
+  transcribing = false;
+  window.localWakeAwaiting = false;
   window.localWhisperRunning = false;
   $('mic')?.classList.remove('active');
   if ($('mic')) $('mic').innerHTML = '🎙 <span class="mic-label">ATIVAR VOZ</span>';
@@ -90,7 +93,7 @@ async function transcribe(samples, rate, thisSession) {
       } else {
         // Se a pessoa disser apenas o nome, aguarda a próxima frase.
         window.localWakeAwaiting = true;
-        if (hint) hint.textContent = 'ESTOU OUVINDO • PODE FALAR O QUE PRECISA';
+        if (hint) hint.textContent = 'CHAMADA RECONHECIDA • FALE AGORA O COMANDO';
       }
     } else if (window.localWakeAwaiting) {
       window.localWakeAwaiting = false;
@@ -139,15 +142,19 @@ async function startLocal() {
     processor.onaudioprocess = event => {
       if (!active || thisSession !== session) return;
       const channel = event.inputBuffer.getChannelData(0);
-      pending.push(new Float32Array(channel));
-      sampleCount += channel.length;
+      // Keep a bounded audio buffer while Whisper is busy so memory cannot grow without limit.
+      if (!transcribing) {
+        pending.push(new Float32Array(channel));
+        sampleCount += channel.length;
+        lastRate = audioContext.sampleRate;
+      }
       if (sampleCount >= audioContext.sampleRate * 5 && !transcribing) {
         const combined = new Float32Array(sampleCount);
         let offset = 0;
         for (const part of pending) { combined.set(part, offset); offset += part.length; }
         pending = [];
         sampleCount = 0;
-        transcribe(combined, audioContext.sampleRate, thisSession);
+        transcribe(combined, lastRate || audioContext.sampleRate, thisSession);
       }
       event.outputBuffer.getChannelData(0).fill(0);
     };
@@ -166,9 +173,9 @@ async function startLocal() {
           progress_callback: progress => {
             if (!active || thisSession !== session || !hint) return;
             if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
-              hint.textContent = 'Baixando modelo Whisper local: ' + Math.round(progress.progress) + '%';
+              hint.textContent = 'Preparando modelo de voz (cache local): ' + Math.round(progress.progress) + '%';
             } else if (progress?.status === 'download') {
-              hint.textContent = 'Baixando arquivos do modelo Whisper local…';
+              hint.textContent = 'Primeira utilização: baixando modelo de voz. Nas próximas vezes, o cache do navegador será reutilizado quando disponível…';
             }
           }
         }
@@ -177,7 +184,7 @@ async function startLocal() {
     if (!active || thisSession !== session) return;
     $('mic')?.classList.add('active');
     if ($('mic')) $('mic').innerHTML = '● <span class="mic-label">VOZ LOCAL ATIVA</span>';
-    if (hint) hint.textContent = 'RECONHECIMENTO LOCAL GRATUITO ATIVO • DIGA “BOM DIA, SEXTA-FEIRA”';
+    if (hint) hint.textContent = 'VOZ LOCAL ATIVA • DIGA “SEXTA-FEIRA” E DEPOIS O SEU COMANDO';
     state('AGUARDANDO SEXTA-FEIRA');
   } catch (error) {
     stopLocal();
