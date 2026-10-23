@@ -9,6 +9,11 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+py -3.12 -c "import edge_tts" >nul 2>nul
+if errorlevel 1 (
+  echo Preparando a voz neural gratuita em portugues brasileiro...
+  py -3.12 -m pip install --user edge-tts >> "%LOG%" 2>&1
+)
 py -3.12 -c "import webview" >nul 2>nul
 if errorlevel 1 (
   py -3.12 -m pip install --user pywebview > "%LOG%" 2>&1
