@@ -128,8 +128,8 @@ async function transcribe(samples, rate, thisSession) {
       'musica alegre', 'que abertura mais animada', 'estou ouvindo', 'parece ser um som',
       'o som de', 'uma musica tocando', 'barulho de fundo', 'audio de fundo'
     ];
-    const likelyWake = /\\b(?:sexta\\s*(?:feira|feir|fera|ver)|sexto\\s*ver)\\b/.test(clean);
-    const likelyCommand = /\\b(?:abra|abre|abrir|inicie|inicia|iniciar|execute|executa|executar|rode|rodar|pesquise|pesquisar|procure|buscar|busque|crie|criar|anote|lembre|guarde|memorize|pare|parar|cancele|cancelar)\\b/.test(clean);
+    const likelyWake = /\b(?:sexta\s*(?:feira|feir|fera|ver)|sexto\s*ver)\b/.test(clean);
+    const likelyCommand = /\b(?:abra|abre|abrir|inicie|inicia|iniciar|execute|executa|executar|rode|rodar|pesquise|pesquisar|procure|buscar|busque|crie|criar|anote|lembre|guarde|memorize|pare|parar|cancele|cancelar)\b/.test(clean);
     // O Whisper pode transformar música, abertura e ruído em frases inventadas.
     // Só descartamos os padrões de alucinação conhecidos; uma fala curta como "boa noite"
     // continua permitida para conversa, mas nunca interpretamos som ambiente como comando.
@@ -138,7 +138,7 @@ async function transcribe(samples, rate, thisSession) {
       return;
     }
     // Evita encaminhar descrições inventadas de sons. Mantém frases conversacionais reais.
-    if (!likelyWake && !likelyCommand && /\\b(?:abertura|trilha|instrumental|som ambiente|som de fundo|musica|vento|agua|barulho)\\b/.test(clean)) {
+    if (!likelyWake && !likelyCommand && /\b(?:abertura|trilha|instrumental|som ambiente|som de fundo|musica|vento|agua|barulho)\b/.test(clean)) {
       if (hint) hint.textContent = 'OUVINDO • ignorei possível áudio de fundo';
       return;
     }
