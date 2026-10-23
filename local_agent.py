@@ -3,7 +3,7 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, quote_plus
-import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os
+import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata
 
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/"public"
@@ -14,7 +14,22 @@ MEMORY_FILE=MEMORY_DIR/"memoria.json"
 MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
 FOLDERS={"downloads":Path.home()/"Downloads","documentos":Path.home()/"Documents","área de trabalho":Path.home()/"Desktop","desktop":Path.home()/"Desktop","imagens":Path.home()/"Pictures","músicas":Path.home()/"Music","música":Path.home()/"Music","vídeos":Path.home()/"Videos","vídeo":Path.home()/"Videos"}
-APPS={"bloco de notas":["notepad.exe"],"calculadora":["calc.exe"],"paint":["mspaint.exe"],"explorador de arquivos":["explorer.exe"],"gerenciador de tarefas":["taskmgr.exe"]}
+# Lista fixa de aplicativos permitidos: não aceita comandos arbitrários vindos do chat.
+APPS={
+ "bloco de notas":["notepad.exe"],"calculadora":["calc.exe"],"paint":["mspaint.exe"],
+ "explorador de arquivos":["explorer.exe"],"gerenciador de tarefas":["taskmgr.exe"],
+ "chrome":["cmd.exe","/c","start","","chrome"],"edge":["cmd.exe","/c","start","","msedge"],
+ "firefox":["cmd.exe","/c","start","","firefox"],"opera":["cmd.exe","/c","start","","opera"],
+ "whatsapp":["cmd.exe","/c","start","","whatsapp:"],"spotify":["cmd.exe","/c","start","","spotify:"],
+ "discord":["cmd.exe","/c","start","","discord:"],"steam":["cmd.exe","/c","start","","steam:"],
+ "vscode":["cmd.exe","/c","start","","code"],"word":["cmd.exe","/c","start","","winword"],
+ "excel":["cmd.exe","/c","start","","excel"],"powerpoint":["cmd.exe","/c","start","","powerpnt"],
+ "configurações":["cmd.exe","/c","start","","ms-settings:"],
+ "terminal":["cmd.exe","/c","start","","wt.exe"],"prompt de comando":["cmd.exe","/c","start","","cmd.exe"],
+ "cmd":["cmd.exe","/c","start","","cmd.exe"],"powershell":["cmd.exe","/c","start","","powershell.exe"]
+}
+def normalize_key(value):
+ return unicodedata.normalize("NFD",str(value or "").lower()).encode("ascii","ignore").decode("ascii").strip()
 
 class Handler(SimpleHTTPRequestHandler):
  def __init__(self,*a,**kw): super().__init__(*a,directory=str(PUBLIC),**kw)
@@ -82,18 +97,18 @@ class Handler(SimpleHTTPRequestHandler):
    if not q:return self.send_json(400,{"error":"Diga o que devo pesquisar."})
    webbrowser.open("https://www.google.com/search?q="+quote_plus(q));return self.send_json(200,{"message":"Abri uma pesquisa no navegador por: "+q})
   if k=="open_folder":
-   p=FOLDERS.get(str(d.get("name","")).lower())
+   p=FOLDERS.get(normalize_key(d.get("name", "")))
    if not p:return self.send_json(400,{"error":"Pasta não permitida."})
    p.mkdir(parents=True,exist_ok=True)
    try:os.startfile(str(p))
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir a pasta: "+str(e)[:150]})
    return self.send_json(200,{"message":"Abri a pasta "+str(p)})
   if k=="open_app":
-   name=str(d.get("name","")).lower();cmd=APPS.get(name)
-   if not cmd:return self.send_json(400,{"error":"Aplicativo não permitido."})
+   name=normalize_key(d.get("name", ""));cmd=APPS.get(name)
+   if not cmd:return self.send_json(400,{"error":"Aplicativo não permitido. Posso abrir apenas programas da lista segura."})
    try:subprocess.Popen(cmd)
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o aplicativo: "+str(e)[:150]})
-   return self.send_json(200,{"message":"Abri "+name+"."})
+   return self.send_json(200,{"message":"Solicitei ao Windows que abra "+name+"."})
   if k=="current_time":return self.send_json(200,{"message":"Agora são "+datetime.datetime.now().strftime("%H:%M")+" de "+datetime.datetime.now().strftime("%d/%m/%Y")+" (horário local do computador)."})
   if k=="system_info":return self.send_json(200,{"message":f"Computador: {platform.node()}\nSistema: {platform.platform()}\nPython: {platform.python_version()}\nPasta do agente: {ROOT}"})
   if k in ("git_status","git_log"):
