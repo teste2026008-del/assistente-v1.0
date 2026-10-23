@@ -3,7 +3,8 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, quote_plus
-import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio, sys
+import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio, sys, io
+from threading import Lock
 
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/"public"
@@ -13,6 +14,60 @@ MEMORY_DIR=Path.home()/"AppData"/"Local"/"Sexta-Feira"
 MEMORY_FILE=MEMORY_DIR/"memoria.json"
 MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
+TTS_DIR=MEMORY_DIR/"models"/"kokoro"
+TTS_MODEL=TTS_DIR/"kokoro-v1.0.onnx"
+TTS_VOICES=TTS_DIR/"voices-v1.0.bin"
+KOKORO_MODEL_URL="https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.onnx"
+KOKORO_VOICES_URL="https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin"
+_KOKORO=None
+_KOKORO_G2P=None
+_TTS_LOCK=Lock()
+
+def _download_model(url,path,min_bytes):
+ path.parent.mkdir(parents=True,exist_ok=True)
+ if path.exists() and path.stat().st_size>=min_bytes: return
+ temp=path.with_suffix(path.suffix+".download")
+ try:
+  request=urllib.request.Request(url,headers={"User-Agent":"Sexta-Feira-Local/1.0"})
+  with urllib.request.urlopen(request,timeout=90) as response, temp.open("wb") as target:
+   while True:
+    chunk=response.read(1024*1024)
+    if not chunk: break
+    target.write(chunk)
+  if temp.stat().st_size<min_bytes: raise RuntimeError("O arquivo do modelo baixado está incompleto.")
+  temp.replace(path)
+ finally:
+  try:
+   if temp.exists(): temp.unlink()
+  except OSError: pass
+
+def _ensure_kokoro():
+ global _KOKORO,_KOKORO_G2P
+ if _KOKORO is not None and _KOKORO_G2P is not None: return _KOKORO,_KOKORO_G2P
+ try:
+  from kokoro_onnx import Kokoro
+  from misaki.espeak import EspeakG2P
+ except ImportError:
+  installed=subprocess.run([sys.executable,"-m","pip","install","--user","kokoro-onnx","soundfile","misaki-fork[en]"],capture_output=True,text=True,timeout=600)
+  if installed.returncode!=0: raise RuntimeError("Não consegui instalar o Kokoro local: "+(installed.stderr or installed.stdout or "erro no pip")[-240:])
+  from kokoro_onnx import Kokoro
+  from misaki.espeak import EspeakG2P
+ _download_model(KOKORO_MODEL_URL,TTS_MODEL,50_000_000)
+ _download_model(KOKORO_VOICES_URL,TTS_VOICES,5_000_000)
+ _KOKORO=Kokoro(str(TTS_MODEL),str(TTS_VOICES))
+ _KOKORO_G2P=EspeakG2P(language="pt-br")
+ return _KOKORO,_KOKORO_G2P
+
+def _kokoro_wav(text):
+ import soundfile as sf
+ with _TTS_LOCK:
+  engine,g2p=_ensure_kokoro()
+  phonemes,_=g2p(text)
+  samples,rate=engine.create(phonemes,"pf_dora",is_phonemes=True)
+  output=io.BytesIO()
+  sf.write(output,samples,rate,format="WAV",subtype="PCM_16")
+  return output.getvalue()
+
 FOLDERS={"downloads":Path.home()/"Downloads","pasta de downloads":Path.home()/"Downloads","documentos":Path.home()/"Documents","meus documentos":Path.home()/"Documents","área de trabalho":Path.home()/"Desktop","area de trabalho":Path.home()/"Desktop","desktop":Path.home()/"Desktop","imagens":Path.home()/"Pictures","fotos":Path.home()/"Pictures","musicas":Path.home()/"Music","musica":Path.home()/"Music","músicas":Path.home()/"Music","música":Path.home()/"Music","videos":Path.home()/"Videos","video":Path.home()/"Videos","vídeos":Path.home()/"Videos","vídeo":Path.home()/"Videos"}
 # Lista fixa de aplicativos permitidos: não aceita comandos arbitrários vindos do chat.
 APPS={
@@ -69,36 +124,41 @@ class Handler(SimpleHTTPRequestHandler):
   text=str(data.get("text","")).strip()[:1800]
   if not text:
    return self.send_json(400,{"error":"Não recebi texto para falar."})
+  # Prioridade: voz neural Kokoro feminina pt-BR, baixada e executada localmente.
   try:
-   import edge_tts
-  except ImportError:
-   # Instala automaticamente se a versão antiga do launcher ainda estiver em uso.
+   audio=_kokoro_wav(text)
+   content_type="audio/wav"
+  except Exception as local_error:
+   print("[Sexta-Feira] Kokoro local indisponível; tentando voz neural gratuita online: "+str(local_error)[:220])
    try:
-    install=subprocess.run([sys.executable,"-m","pip","install","--user","edge-tts"],capture_output=True,text=True,timeout=180)
-    if install.returncode != 0:
-     return self.send_json(503,{"error":"Não consegui instalar automaticamente a voz neural gratuita.","detail":(install.stderr or install.stdout or "Verifique a conexão com a internet.")[-220:]})
     import edge_tts
+   except ImportError:
+    try:
+     install=subprocess.run([sys.executable,"-m","pip","install","--user","edge-tts"],capture_output=True,text=True,timeout=180)
+     if install.returncode!=0:
+      return self.send_json(503,{"error":"Não consegui preparar a voz neural gratuita.","detail":(install.stderr or install.stdout or str(local_error))[-220:]})
+     import edge_tts
+    except Exception as e:
+     return self.send_json(503,{"error":"Não consegui preparar a voz neural gratuita.","detail":str(e)[:220]})
+   async def generate():
+    communicate=edge_tts.Communicate(text,voice="pt-BR-FranciscaNeural",rate="+0%",pitch="+0Hz")
+    chunks=[]
+    async for chunk in communicate.stream():
+     if chunk.get("type")=="audio": chunks.append(chunk.get("data",b""))
+    return b"".join(chunks)
+   try:
+    audio=asyncio.run(generate())
+    content_type="audio/mpeg"
    except Exception as e:
-    return self.send_json(503,{"error":"Não consegui preparar a voz neural gratuita.","detail":str(e)[:220]})
-  async def generate():
-   communicate=edge_tts.Communicate(text,voice="pt-BR-FranciscaNeural",rate="+0%",pitch="+0Hz")
-   chunks=[]
-   async for chunk in communicate.stream():
-    if chunk.get("type")=="audio":
-     chunks.append(chunk.get("data",b""))
-   return b"".join(chunks)
-  try:
-   audio=asyncio.run(generate())
-   if not audio:
-    return self.send_json(502,{"error":"O serviço gratuito de voz não retornou áudio.","detail":"Confira a conexão com a internet."})
-   self.send_response(200)
-   self.send_header("Content-Type","audio/mpeg")
-   self.send_header("Content-Length",str(len(audio)))
-   self.send_header("Cache-Control","no-store")
-   self.end_headers()
-   self.wfile.write(audio)
-  except Exception as e:
-   return self.send_json(502,{"error":"Não consegui gerar a voz neural gratuita.","detail":str(e)[:220]})
+    return self.send_json(502,{"error":"Não consegui gerar o áudio neural local nem online.","detail":str(e)[:220]})
+  if not audio:
+   return self.send_json(502,{"error":"O mecanismo de voz não retornou áudio."})
+  self.send_response(200)
+  self.send_header("Content-Type",content_type)
+  self.send_header("Content-Length",str(len(audio)))
+  self.send_header("Cache-Control","no-store")
+  self.end_headers()
+  self.wfile.write(audio)
  def proxy(self,path,body,method):
   try:
    req=urllib.request.Request(WORKER+path,data=body if method=="POST" else None,method=method,headers={"Content-Type":"application/json","User-Agent":"Sexta-Feira-Local/1.0"})
