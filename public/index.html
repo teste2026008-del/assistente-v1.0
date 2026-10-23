@@ -100,7 +100,8 @@ async function tryLocalAction(text){
  ];
  function findApp(target){
    let t=norm(target).replace(/^(?:a|o|as|os|minha|minhas|meu|meus|uma|um|do|da|dos|das)\s+/,'');
-   t=t.replace(/\s+(?:do windows|do computador|que ja esta instalada|ja esta instalada|que esta instalada|instalada|instalado|do pc)$/,'').trim();
+   t=t.replace(/\s+(?:que ja esta instalada|ja esta instalada|ja ta instalada|ta instalada|que esta instalada|instalada|instalado)$/,'').trim();
+   t=t.replace(/\s+(?:do windows|do computador|do pc|que ja esta instalada|ja esta instalada|ja ta instalada|ta instalada)$/,'').trim();
    for(const item of appAliases)if(item.keys.some(k=>norm(k)===t))return item.name;
    let best=null,bestDistance=Infinity;
    for(const item of appAliases){
