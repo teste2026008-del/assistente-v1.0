@@ -35,6 +35,10 @@ def normalize_key(value):
 class Handler(SimpleHTTPRequestHandler):
  def __init__(self,*a,**kw): super().__init__(*a,directory=str(PUBLIC),**kw)
  def log_message(self,fmt,*args): print("[Sexta-Feira] "+(fmt%args))
+ def end_headers(self):
+  self.send_header("Cache-Control","no-store, no-cache, must-revalidate, max-age=0")
+  self.send_header("Pragma","no-cache")
+  super().end_headers()
  def send_json(self,status,obj):
   b=json.dumps(obj,ensure_ascii=False).encode("utf-8")
   self.send_response(status);self.send_header("Content-Type","application/json; charset=utf-8");self.send_header("Content-Length",str(len(b)));self.send_header("Cache-Control","no-store");self.end_headers();self.wfile.write(b)
