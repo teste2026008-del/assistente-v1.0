@@ -13,7 +13,7 @@ MEMORY_DIR=Path.home()/"AppData"/"Local"/"Sexta-Feira"
 MEMORY_FILE=MEMORY_DIR/"memoria.json"
 MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
-FOLDERS={"downloads":Path.home()/"Downloads","documentos":Path.home()/"Documents","área de trabalho":Path.home()/"Desktop","desktop":Path.home()/"Desktop","imagens":Path.home()/"Pictures","músicas":Path.home()/"Music","música":Path.home()/"Music","vídeos":Path.home()/"Videos","vídeo":Path.home()/"Videos"}
+FOLDERS={"downloads":Path.home()/"Downloads","documentos":Path.home()/"Documents","área de trabalho":Path.home()/"Desktop","area de trabalho":Path.home()/"Desktop","desktop":Path.home()/"Desktop","imagens":Path.home()/"Pictures","musicas":Path.home()/"Music","musica":Path.home()/"Music","músicas":Path.home()/"Music","música":Path.home()/"Music","videos":Path.home()/"Videos","video":Path.home()/"Videos","vídeos":Path.home()/"Videos","vídeo":Path.home()/"Videos"}
 # Lista fixa de aplicativos permitidos: não aceita comandos arbitrários vindos do chat.
 APPS={
  "bloco de notas":["notepad.exe"],"calculadora":["calc.exe"],"paint":["mspaint.exe"],
