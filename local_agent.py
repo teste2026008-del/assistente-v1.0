@@ -3,7 +3,7 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, quote_plus
-import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio
+import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio, sys
 
 ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/"public"
@@ -72,7 +72,14 @@ class Handler(SimpleHTTPRequestHandler):
   try:
    import edge_tts
   except ImportError:
-   return self.send_json(503,{"error":"O mecanismo de voz neural gratuito ainda está sendo instalado.","detail":"Feche e abra o aplicativo novamente para concluir a instalação."})
+   # Instala automaticamente se a versão antiga do launcher ainda estiver em uso.
+   try:
+    install=subprocess.run([sys.executable,"-m","pip","install","--user","edge-tts"],capture_output=True,text=True,timeout=180)
+    if install.returncode != 0:
+     return self.send_json(503,{"error":"Não consegui instalar automaticamente a voz neural gratuita.","detail":(install.stderr or install.stdout or "Verifique a conexão com a internet.")[-220:]})
+    import edge_tts
+   except Exception as e:
+    return self.send_json(503,{"error":"Não consegui preparar a voz neural gratuita.","detail":str(e)[:220]})
   async def generate():
    communicate=edge_tts.Communicate(text,voice="pt-BR-FranciscaNeural",rate="+0%",pitch="+0Hz")
    chunks=[]
