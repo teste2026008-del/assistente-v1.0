@@ -6,7 +6,7 @@ env.useBrowserCache = true;
 const $ = id => document.getElementById(id);
 let asr = null, stream = null, audioContext = null, source = null, processor = null;
 let active = false, loading = false, transcribing = false, pending = [], sampleCount = 0, lastRate = 0;
-let speechFrames = 0, peakRms = 0, commandCooldownUntil = 0;
+let speechFrames = 0, silenceFrames = 0, peakRms = 0, commandCooldownUntil = 0;
 let session = 0;
 let modelPromise = null;
 let permissionStatus = 'unknown';
@@ -33,6 +33,7 @@ function stopLocal() {
   sampleCount = 0;
   lastRate = 0;
   speechFrames = 0;
+  silenceFrames = 0;
   peakRms = 0;
   commandCooldownUntil = 0;
   transcribing = false;
@@ -146,20 +147,31 @@ async function transcribe(samples, rate, thisSession) {
 async function ensureModel(hint) {
   if (asr) return asr;
   if (!modelPromise) {
-    modelPromise = pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny', {
-      device: 'wasm',
-      progress_callback: progress => {
-        if (!hint) return;
-        if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
-          hint.textContent = 'Preparando voz do cache: ' + Math.round(progress.progress) + '%';
-        } else if (progress?.status === 'download') {
-          hint.textContent = 'Baixando o modelo de voz pela primeira vez; os arquivos serão reutilizados do cache nas próximas aberturas…';
+    modelPromise = (async () => {
+      const options = {
+        progress_callback: progress => {
+          if (!hint) return;
+          if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
+            hint.textContent = 'Preparando modelo de maior precisão: ' + Math.round(progress.progress) + '%';
+          } else if (progress?.status === 'download') {
+            hint.textContent = 'Baixando o modelo de voz de maior precisão pela primeira vez; depois será reutilizado do cache…';
+          }
+        }
+      };
+      // Whisper Base melhora a transcrição de frases em português em relação ao Tiny.
+      // Usa WebGPU quando disponível e retorna à CPU (WASM) se o WebView não suportar.
+      if (navigator.gpu) {
+        try {
+          const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', { ...options, device: 'webgpu' });
+          asr = model; return model;
+        } catch (gpuError) {
+          console.warn('WebGPU indisponível para Whisper Base; usando WASM.', gpuError);
+          if (hint) hint.textContent = 'GPU indisponível; preparando reconhecimento local pela CPU…';
         }
       }
-    }).then(model => { asr = model; return model; }).catch(error => {
-      modelPromise = null;
-      throw error;
-    });
+      const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', { ...options, device: 'wasm' });
+      asr = model; return model;
+    })().catch(error => { modelPromise = null; throw error; });
   }
   return modelPromise;
 }
@@ -203,6 +215,7 @@ async function startLocal() {
     pending = [];
     sampleCount = 0;
     speechFrames = 0;
+    silenceFrames = 0;
     peakRms = 0;
 
     processor.onaudioprocess = event => {
@@ -233,17 +246,22 @@ async function startLocal() {
         speechFrames = 0;
         peakRms = 0;
       }
-      if (sampleCount >= audioContext.sampleRate * 5 && !transcribing) {
-        const combined = new Float32Array(sampleCount);
-        let offset = 0;
-        for (const part of pending) { combined.set(part, offset); offset += part.length; }
-        const hasVoice = speechFrames >= 2 && peakRms >= 0.045;
-        pending = [];
-        sampleCount = 0;
-        speechFrames = 0;
-        peakRms = 0;
-        if (hasVoice && !window.localAssistantSpeaking && !window.localAssistantBusy && Date.now() >= commandCooldownUntil) {
-          transcribe(combined, lastRate || audioContext.sampleRate, thisSession);
+      if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) {
+        pending = []; sampleCount = 0; speechFrames = 0; silenceFrames = 0; peakRms = 0;
+      } else {
+        const voiceNow = rms >= 0.008 && framePeak >= 0.022;
+        if (voiceNow) { speechFrames++; silenceFrames = 0; }
+        else if (speechFrames > 0) silenceFrames++;
+        // Envia a frase depois de uma pausa natural, em vez de cortar o comando a cada 5 s.
+        const endedBySilence = speechFrames >= 2 && silenceFrames >= 3;
+        const reachedLimit = sampleCount >= audioContext.sampleRate * 12;
+        if ((endedBySilence || reachedLimit) && !transcribing) {
+          const combined = new Float32Array(sampleCount);
+          let offset = 0;
+          for (const part of pending) { combined.set(part, offset); offset += part.length; }
+          const hasVoice = speechFrames >= 2 && peakRms >= 0.025 && sampleCount >= audioContext.sampleRate * 1.0;
+          pending = []; sampleCount = 0; speechFrames = 0; silenceFrames = 0; peakRms = 0;
+          if (hasVoice) transcribe(combined, lastRate || audioContext.sampleRate, thisSession);
         }
       }
       event.outputBuffer.getChannelData(0).fill(0);
