@@ -9,6 +9,9 @@ ROOT=Path(__file__).resolve().parent
 PUBLIC=ROOT/"public"
 WORKER="https://assistente-v1-0.teste2026008.workers.dev"
 NOTES=ROOT/"notas"
+MEMORY_DIR=Path.home()/"AppData"/"Local"/"Sexta-Feira"
+MEMORY_FILE=MEMORY_DIR/"memoria.json"
+MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
 FOLDERS={"downloads":Path.home()/"Downloads","documentos":Path.home()/"Documents","área de trabalho":Path.home()/"Desktop","desktop":Path.home()/"Desktop","imagens":Path.home()/"Pictures","músicas":Path.home()/"Music","música":Path.home()/"Music","vídeos":Path.home()/"Videos","vídeo":Path.home()/"Videos"}
 APPS={"bloco de notas":["notepad.exe"],"calculadora":["calc.exe"],"paint":["mspaint.exe"],"explorador de arquivos":["explorer.exe"],"gerenciador de tarefas":["taskmgr.exe"]}
@@ -22,6 +25,7 @@ class Handler(SimpleHTTPRequestHandler):
  def do_GET(self):
   p=urlparse(self.path).path
   if p=="/api/health": return self.send_json(200,{"ok":True,"service":"Sexta-Feira Local","host":HOST,"port":PORT})
+  if p=="/api/memory": return self.memory_get()
   if p.startswith("/api/"): return self.proxy(p,b"","GET")
   return super().do_GET()
  def do_POST(self):
@@ -30,6 +34,10 @@ class Handler(SimpleHTTPRequestHandler):
    try:data=json.loads(body or b"{}")
    except Exception:return self.send_json(400,{"error":"JSON inválido."})
    return self.action(data)
+  if p=="/api/memory":
+   try:data=json.loads(body or b"{}")
+   except Exception:return self.send_json(400,{"error":"JSON inválido."})
+   return self.memory_save(data)
   if p.startswith("/api/"):return self.proxy(p,body,"POST")
   return self.send_json(404,{"error":"Rota não encontrada."})
  def proxy(self,path,body,method):
@@ -40,6 +48,28 @@ class Handler(SimpleHTTPRequestHandler):
   except urllib.error.HTTPError as e:
    data=e.read();self.send_response(e.code);self.send_header("Content-Type",e.headers.get("Content-Type","application/json"));self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
   except Exception as e:self.send_json(502,{"error":"Falha ao conectar à IA/voz online.","detail":str(e)[:220]})
+ def memory_read(self):
+  try:
+   data=json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
+   if not isinstance(data,dict): raise ValueError("Formato inválido")
+  except (OSError,ValueError,TypeError):
+   data={"facts":[],"history":[]}
+  data.setdefault("facts",[]);data.setdefault("history",[])
+  return data
+ def memory_get(self):
+  data=self.memory_read()
+  return self.send_json(200,{"facts":data["facts"],"history":data["history"][-12:]})
+ def memory_save(self,d):
+  facts=d.get("facts",[]);history=d.get("history",[])
+  if not isinstance(facts,list) or not isinstance(history,list):
+   return self.send_json(400,{"error":"Memória inválida."})
+  facts=[str(x).strip()[:500] for x in facts if str(x).strip()][:100]
+  history=[{"role":str(x.get("role",""))[:20],"text":str(x.get("text","")).strip()[:3000]} for x in history[-12:] if isinstance(x,dict) and str(x.get("text","")).strip()]
+  try:
+   MEMORY_FILE.write_text(json.dumps({"facts":facts,"history":history},ensure_ascii=False,indent=2),encoding="utf-8")
+  except OSError as e:
+   return self.send_json(500,{"error":"Não consegui salvar a memória local: "+str(e)[:160]})
+  return self.send_json(200,{"ok":True,"facts":len(facts),"history":len(history)})
  def action(self,d):
   k=d.get("type")
   if k=="open_browser":webbrowser.open("https://www.google.com");return self.send_json(200,{"message":"Abri o navegador na página inicial do Google."})
