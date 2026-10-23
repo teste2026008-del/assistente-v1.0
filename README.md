@@ -10,6 +10,15 @@ Assistente de programação em português brasileiro, com interface de conversa,
 - Endpoint `/api/chat` em `src/index.js`, preparado para Cloudflare Workers AI.
 - A integração com GitHub e Cloudflare para executar alterações em projetos ainda não está implementada.
 
+## Executar localmente no Windows
+
+1. Instale Python 3.11 ou superior e marque **Add Python to PATH**.
+2. Dê dois cliques em `INICIAR-SEXTA-FEIRA.bat`.
+3. A interface abre em `http://127.0.0.1:8765`. Feche a janela preta para encerrar.
+4. O reconhecimento Whisper do navegador baixa o modelo na primeira utilização. Chat e voz ainda usam o Worker online; esta versão não é totalmente offline.
+
+Comandos locais implementados: “abra o navegador”, “abra https://...”, “informações do sistema”, “status do git” e “crie uma nota: ...”. Por segurança, o agente só escuta no próprio computador e não executa comandos arbitrários. Integrações de GitHub/Cloudflare que alterem contas e projetos ainda não estão conectadas.
+
 ## Publicar no Cloudflare Workers
 
 1. Instale Node.js LTS e Wrangler em um ambiente local.
