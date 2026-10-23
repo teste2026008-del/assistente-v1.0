@@ -13,13 +13,14 @@ MEMORY_DIR=Path.home()/"AppData"/"Local"/"Sexta-Feira"
 MEMORY_FILE=MEMORY_DIR/"memoria.json"
 MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
-FOLDERS={"downloads":Path.home()/"Downloads","documentos":Path.home()/"Documents","área de trabalho":Path.home()/"Desktop","area de trabalho":Path.home()/"Desktop","desktop":Path.home()/"Desktop","imagens":Path.home()/"Pictures","musicas":Path.home()/"Music","musica":Path.home()/"Music","músicas":Path.home()/"Music","música":Path.home()/"Music","videos":Path.home()/"Videos","video":Path.home()/"Videos","vídeos":Path.home()/"Videos","vídeo":Path.home()/"Videos"}
+FOLDERS={"downloads":Path.home()/"Downloads","pasta de downloads":Path.home()/"Downloads","documentos":Path.home()/"Documents","meus documentos":Path.home()/"Documents","área de trabalho":Path.home()/"Desktop","area de trabalho":Path.home()/"Desktop","desktop":Path.home()/"Desktop","imagens":Path.home()/"Pictures","fotos":Path.home()/"Pictures","musicas":Path.home()/"Music","musica":Path.home()/"Music","músicas":Path.home()/"Music","música":Path.home()/"Music","videos":Path.home()/"Videos","video":Path.home()/"Videos","vídeos":Path.home()/"Videos","vídeo":Path.home()/"Videos"}
 # Lista fixa de aplicativos permitidos: não aceita comandos arbitrários vindos do chat.
 APPS={
  "bloco de notas":["notepad.exe"],"calculadora":["calc.exe"],"paint":["mspaint.exe"],
  "explorador de arquivos":["explorer.exe"],"gerenciador de tarefas":["taskmgr.exe"],
  "chrome":["cmd.exe","/c","start","","chrome"],"edge":["cmd.exe","/c","start","","msedge"],
  "firefox":["cmd.exe","/c","start","","firefox"],"opera":["cmd.exe","/c","start","","opera"],
+ "opera gx":["cmd.exe","/c","start","","opera://"],
  "whatsapp":["cmd.exe","/c","start","","whatsapp:"],"spotify":["cmd.exe","/c","start","","spotify:"],
  "discord":["cmd.exe","/c","start","","discord:"],"steam":["cmd.exe","/c","start","","steam:"],
  "vscode":["cmd.exe","/c","start","","code"],"word":["cmd.exe","/c","start","","winword"],
@@ -108,10 +109,16 @@ class Handler(SimpleHTTPRequestHandler):
    if not cmd:return self.send_json(400,{"error":"Aplicativo não permitido. Posso abrir apenas programas da lista segura."})
    try:
     if name=="calculadora":
-     # O app Calculadora moderno pode não abrir diretamente por calc.exe em algumas instalações.
-     try:os.startfile("calculator:")
-     except Exception:subprocess.Popen(["calc.exe"],shell=False)
-    else:subprocess.Popen(cmd)
+     # Tenta primeiro o URI oficial e depois os caminhos de inicialização do Windows.
+     try:
+      os.startfile("calculator:")
+     except Exception:
+      try:subprocess.Popen(["calc.exe"],shell=False)
+      except Exception:subprocess.Popen(["cmd.exe","/c","start","","calculator:"],shell=False)
+    elif name in ("opera","opera gx"):
+     # O comando start permite que o Windows resolva a instalação/registro do navegador.
+     subprocess.Popen(cmd,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    else:subprocess.Popen(cmd,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o aplicativo: "+str(e)[:150]})
    return self.send_json(200,{"message":"Solicitei ao Windows que abra "+name+"."})
   if k=="current_time":return self.send_json(200,{"message":"Agora são "+datetime.datetime.now().strftime("%H:%M")+" de "+datetime.datetime.now().strftime("%d/%m/%Y")+" (horário local do computador)."})
