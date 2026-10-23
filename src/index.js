@@ -7,7 +7,23 @@ export default {
    if (request.method === "OPTIONS") return new Response(null,{headers});
    if (url.pathname === "/api/health") return Response.json({ok:true,service:"Sexta-Feira",aiAvailable:!!env.AI,elevenLabsAvailable:!!env.ELEVENLABS_API_KEY,voiceId:"pNInz6obpgDQGcFmaJgB"},{headers});
    if (request.method !== "POST") return Response.json({error:"Use POST para este endpoint."},{status:405,headers});
-   if (url.pathname === \"/api/tts\") {\n    if (!env.ELEVENLABS_API_KEY) return Response.json({error:\"A chave do serviço de voz neural não está configurada no Worker.\"},{status:503,headers});\n    try {\n     const body = await request.json();\n     const text = typeof body.text === \"string\" ? body.text.trim().slice(0,1800) : \"\";\n     if (!text) return Response.json({error:\"Não recebi texto para falar.\"},{status:400,headers});\n     const voiceId = \"21m00Tcm4TlvDq8ikWAM\";\n     const upstream = await fetch(\"https://api.elevenlabs.io/v1/text-to-speech/\" + voiceId, {method:\"POST\",headers:{\"xi-api-key\":env.ELEVENLABS_API_KEY,\"Content-Type\":\"application/json\",\"Accept\":\"audio/mpeg\"},body:JSON.stringify({text,model_id:\"eleven_multilingual_v2\",language_code:\"pt\",voice_settings:{stability:0.42,similarity_boost:0.78,style:0.28,use_speaker_boost:true}})});\n     if (!upstream.ok) {const detail=(await upstream.text()).slice(0,300);return Response.json({error:upstream.status===401||upstream.status===403?\"A chave do serviço de voz foi recusada.\":\"O serviço de voz não conseguiu gerar o áudio.\",detail},{status:upstream.status===429?429:502,headers});}\n     return new Response(upstream.body,{status:200,headers:{\"Content-Type\":\"audio/mpeg\",\"Cache-Control\":\"no-store\",\"Access-Control-Allow-Origin\":url.origin,\"Access-Control-Allow-Methods\":\"GET, POST, OPTIONS\",\"Access-Control-Allow-Headers\":\"Content-Type\"}});\n    } catch (err) {return Response.json({error:\"Falha ao gerar a voz neural.\",detail:String(err?.message||err).slice(0,200)},{status:502,headers});}\n   }if (url.pathname === "/api/chat") {
+    if (url.pathname === "/api/tts") {
+     if (!env.ELEVENLABS_API_KEY) return Response.json({error:"A chave do serviço de voz neural não está configurada no Worker."},{status:503,headers});
+     try {
+      const body = await request.json();
+      const text = typeof body.text === "string" ? body.text.trim().slice(0,1800) : "";
+      if (!text) return Response.json({error:"Não recebi texto para falar."},{status:400,headers});
+      const voiceId = "21m00Tcm4TlvDq8ikWAM";
+      const upstream = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + voiceId, {method:"POST",headers:{"xi-api-key":env.ELEVENLABS_API_KEY,"Content-Type":"application/json","Accept":"audio/mpeg"},body:JSON.stringify({text,model_id:"eleven_multilingual_v2",language_code:"pt",voice_settings:{stability:0.42,similarity_boost:0.78,style:0.28,use_speaker_boost:true}})});
+      if (!upstream.ok) {
+       const detail = (await upstream.text()).slice(0,500);
+       return Response.json({error:upstream.status===401||upstream.status===403?"A chave foi recusada ou a voz não está disponível neste plano.":upstream.status===429?"O limite de uso da voz foi atingido.":"O serviço de voz não conseguiu gerar o áudio.",detail},{status:upstream.status===429?429:502,headers});
+      }
+      return new Response(upstream.body,{status:200,headers:{"Content-Type":"audio/mpeg","Cache-Control":"no-store","Access-Control-Allow-Origin":url.origin,"Access-Control-Allow-Methods":"GET, POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type"}});
+     } catch (err) {
+      return Response.json({error:"Falha ao gerar a voz neural.",detail:String(err?.message||err).slice(0,200)},{status:502,headers});
+     }
+    }
     if (!env.AI) return Response.json({error:"A inteligência artificial não está conectada ao Worker. O binding AI precisa estar habilitado."},{status:503,headers});
     try {
      const body = await request.json();
