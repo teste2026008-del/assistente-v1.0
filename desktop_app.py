@@ -17,7 +17,7 @@ OWNER = "teste2026008-del"
 REPO = "assistente-v1.0"
 BRANCH = "main"
 GITHUB_API = f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{BRANCH}"
-RAW_BASE = f"https://raw.githubusercontent.com/{OWNER}/{REPO}/{BRANCH}"
+RAW_BASE = f"https://raw.githubusercontent.com/{OWNER}/{REPO}"
 APP_HOST = "127.0.0.1"
 APP_PORT = 8765
 
@@ -84,7 +84,7 @@ def check_and_apply_updates():
         with tempfile.TemporaryDirectory(prefix="sexta-feira-update-") as temp_dir:
             temp_root = Path(temp_dir)
             for relative in UPDATE_FILES:
-                url = f"{RAW_BASE}/{relative}?v={latest_sha}"
+                url = f"{RAW_BASE}/{latest_sha}/{relative}?v={latest_sha}"
                 data = _download(url)
                 if not _file_is_valid(relative, data):
                     raise RuntimeError(f"Arquivo de atualização inválido: {relative}")
