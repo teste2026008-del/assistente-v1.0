@@ -43,6 +43,15 @@ if errorlevel 1 (
 
 echo.
 echo [2/3] Verificando a janela do aplicativo...
+py -3.11 -c "import edge_tts" >nul 2>&1
+if errorlevel 1 (
+  echo Instalando o mecanismo gratuito de voz neural em portugues brasileiro...
+  py -3.11 -m pip install --user edge-tts >> "%LOG%" 2>&1
+  py -3.11 -c "import edge_tts" >nul 2>&1
+  if errorlevel 1 (
+    echo AVISO: nao consegui instalar a voz neural agora. O app ainda tentara a voz local do Windows.
+  )
+)
 py -3.11 -c "import webview" >nul 2>&1
 if errorlevel 1 (
   echo Instalando pywebview no Python 3.11...
