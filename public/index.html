@@ -28,10 +28,10 @@ async function tryLocalAction(text){
  if(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir) (?:o )?navegador$/i.test(s))action={type:'open_browser'};
  else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir) (https?:\/\/\S+)$/i)))action={type:'open_url',url:m[1]};
  else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:pesquise|pesquisar|procure|buscar) (.+)$/i)))action={type:'web_search',query:m[1]};
- else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:abra|abrir|mostre) (?:a pasta )?(downloads|documentos|documentos|área de trabalho|desktop|imagens|imagens|músicas|música|vídeos|vídeo)$/i)))action={type:'open_folder',name:m[1]};
+ else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:abra|abrir|mostre) (?:a pasta )?(downloads|documentos|área de trabalho|desktop|imagens|músicas|música|vídeos|vídeo)$/i)))action={type:'open_folder',name:m[1]};
  else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:abra|abrir) (bloco de notas|calculadora|paint|explorador de arquivos|gerenciador de tarefas)$/i)))action={type:'open_app',name:m[1]};
- else if(/^(?:sexta-feira[, ]*)?(?:status do git|verifique o git|git status)$/i.test(s))action={type:'git_status'};
- else if(/^(?:sexta-feira[, ]*)?(?:últimos commits|histórico do git|git log)$/i.test(s))action={type:'git_log'};
+ else if(/^(?:sexta-feira[, ]*)?(?:status do git|verifique o git|git status)$/i.test(s))action={type:'git_status};
+ else if(/^(?:sexta-feira[, ]*)?(?:últimos commits|histórico do git|git log)$/i.test(s))action={type:'git_log};
  else if(/^(?:sexta-feira[, ]*)?(?:informações do sistema|info do computador|status do computador)$/i.test(s))action={type:'system_info'};
  else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:liste|listar|mostre) (?:os arquivos de )?(downloads|documentos|área de trabalho|desktop)$/i)))action={type:'list_folder',name:m[1]};
  else if((m=s.match(/^(?:sexta-feira[, ]*)?(?:crie|criar|anote) (?:uma )?(?:anotação|nota)[: ]+(.+)$/i)))action={type:'create_note',text:m[1]};
