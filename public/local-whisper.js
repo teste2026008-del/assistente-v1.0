@@ -8,6 +8,8 @@ let asr = null, stream = null, audioContext = null, source = null, processor = n
 let active = false, loading = false, transcribing = false, pending = [], sampleCount = 0, lastRate = 0;
 let speechFrames = 0, peakRms = 0, commandCooldownUntil = 0;
 let session = 0;
+let modelPromise = null;
+let permissionStatus = 'unknown';
 
 const normalize = value => String(value || '')
   .toLocaleLowerCase('pt-BR')
@@ -141,6 +143,37 @@ async function transcribe(samples, rate, thisSession) {
   }
 }
 
+async function ensureModel(hint) {
+  if (asr) return asr;
+  if (!modelPromise) {
+    modelPromise = pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny', {
+      device: 'wasm',
+      progress_callback: progress => {
+        if (!hint) return;
+        if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
+          hint.textContent = 'Preparando voz do cache: ' + Math.round(progress.progress) + '%';
+        } else if (progress?.status === 'download') {
+          hint.textContent = 'Baixando o modelo de voz pela primeira vez; os arquivos serão reutilizados do cache nas próximas aberturas…';
+        }
+      }
+    }).then(model => { asr = model; return model; }).catch(error => {
+      modelPromise = null;
+      throw error;
+    });
+  }
+  return modelPromise;
+}
+
+async function inspectMicPermission() {
+  try {
+    if (!navigator.permissions?.query) return 'unknown';
+    const status = await navigator.permissions.query({ name: 'microphone' });
+    permissionStatus = status.state;
+    status.onchange = () => { permissionStatus = status.state; };
+    return permissionStatus;
+  } catch { return 'unknown'; }
+}
+
 async function startLocal() {
   if (active || loading) return;
   loading = true;
@@ -218,26 +251,9 @@ async function startLocal() {
     source.connect(processor);
     processor.connect(audioContext.destination);
 
-    if (hint) hint.textContent = asr ? 'Reutilizando o modelo de voz já carregado…' : 'Carregando o modelo leve de voz; o cache será reutilizado nas próximas aberturas…';
-    state(asr ? 'REUTILIZANDO MODELO DE VOZ' : 'CARREGANDO MODELO DE VOZ');
-
-    if (!asr) {
-      asr = await pipeline(
-        'automatic-speech-recognition',
-        'onnx-community/whisper-tiny',
-        {
-          device: 'wasm',
-          progress_callback: progress => {
-            if (!active || thisSession !== session || !hint) return;
-            if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
-              hint.textContent = 'Carregando modelo de voz do cache: ' + Math.round(progress.progress) + '%';
-            } else if (progress?.status === 'download') {
-              hint.textContent = 'Baixando o modelo de voz pela primeira vez. O cache local persistente será reutilizado nas próximas aberturas…';
-            }
-          }
-        }
-      );
-    }
+    if (hint) hint.textContent = asr ? 'Modelo de voz já está na memória.' : 'Preparando o modelo de voz; os arquivos baixados serão reutilizados do cache persistente…';
+    state(asr ? 'MODELO DE VOZ PRONTO' : 'PREPARANDO MODELO DE VOZ');
+    await ensureModel(hint);
     if (!active || thisSession !== session) return;
     $('mic')?.classList.add('active');
     if ($('mic')) $('mic').innerHTML = '● <span class="mic-label">VOZ LOCAL ATIVA</span>';
@@ -278,3 +294,19 @@ $('stop')?.addEventListener('click', event => {
     if ($('hint')) $('hint').textContent = 'ESCUTA PARADA';
   }
 }, true);
+
+
+// Prepara o modelo em segundo plano ao abrir o app, sem pedir acesso ao microfone.
+window.addEventListener('DOMContentLoaded', () => {
+  const hint = $('hint');
+  inspectMicPermission().then(permission => {
+    if (permission === 'denied' && hint) hint.textContent = 'MICROFONE BLOQUEADO • confira as permissões do aplicativo.';
+  });
+  ensureModel(null).then(() => {
+    if (!active && hint) hint.textContent = permissionStatus === 'denied'
+      ? 'MODELO DE VOZ PRONTO • MICROFONE BLOQUEADO NAS PERMISSÕES'
+      : 'MODELO DE VOZ PRONTO • CACHE PREPARADO';
+  }).catch(error => {
+    if (hint) hint.textContent = 'A voz será preparada ao ativar o microfone: ' + (error?.message || String(error));
+  });
+});
