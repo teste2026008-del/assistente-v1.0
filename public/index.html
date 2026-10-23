@@ -48,7 +48,7 @@ async function tryLocalAction(text){
  }
  else if((m=original.match(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir|acesse|acessar|entre em|ir para)\s+(https?:\/\/\S+)$/i)))action={type:'open_url',url:m[1]};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:pesquise|pesquisar|procure|buscar|busque|pesquisa na internet) (.+)$/i)))action={type:'web_search',query:m[1]};
- else if((m=s.match(new RegExp('^'+prefix+verb+' '+optional+'(?:pasta )?(downloads|documentos|area de trabalho|desktop|imagens|musicas|musica|videos|video|explorador de arquivos)$','i'))))action={type:'open_folder',name:m[1]};
+ else if((m=s.match(new RegExp('^'+prefix+verb+' '+optional+'(?:pasta )?(downloads|documentos|area de trabalho|desktop|imagens|musicas|musica|videos|video)$','i'))))action={type:'open_folder',name:m[1]};
  else if((m=s.match(new RegExp('^'+prefix+verb+' '+optional+'(bloco de notas|notepad|calculadora|minha calculadora|calc|paint|mspaint|explorador de arquivos|gerenciador de tarefas|task manager|taskmgr|chrome|google chrome|edge|microsoft edge|firefox|opera|whatsapp|spotify|discord|steam|vscode|vs code|visual studio code|word|microsoft word|excel|microsoft excel|powerpoint|microsoft powerpoint|configuracoes|configuracoes do windows|terminal|prompt de comando|cmd|powershell)$','i')))) {
    let name=m[1].trim();
    const aliases={'minha calculadora':'calculadora','calc':'calculadora','notepad':'bloco de notas','mspaint':'paint','task manager':'gerenciador de tarefas','taskmgr':'gerenciador de tarefas','google chrome':'chrome','microsoft edge':'edge','vs code':'vscode','visual studio code':'vscode','microsoft word':'word','microsoft excel':'excel','microsoft powerpoint':'powerpoint','configuracoes':'configurações','configuracoes do windows':'configurações'};
