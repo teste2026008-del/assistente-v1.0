@@ -80,23 +80,30 @@ async function transcribe(samples, rate, thisSession) {
     const heard = String(result?.text || '').trim();
     const clean = normalize(heard);
     const hint = $('hint');
-    if (heard && hint) hint.textContent = 'OUVI: “' + heard + '”';
+    if (heard && hint) hint.textContent = 'RECONHECI: “' + heard + '”';
 
     if (!clean) return;
-    // Aceita tanto "Sexta-Feira" sozinho quanto "Bom dia, Sexta-Feira".
-    const wake = clean.match(/\b(?:(?:bom dia|boa tarde|boa noite|ola|oi)\s+)?sexta feira\b/);
+
+    // O microfone é ativado manualmente pelo usuário: aceite comandos falados
+    // diretamente, sem exigir palavra de ativação. A palavra "Sexta-Feira"
+    // continua funcionando para chamar a assistente antes de dar o comando.
+    const wake = clean.match(/\b(?:(?:bom dia|boa tarde|boa noite|ola|oi)\s+)?sexta\s*(?:feira|feir|fera)\b/);
     if (wake) {
       const rest = clean.slice(wake.index + wake[0].length).trim();
       if (rest) {
         window.localWakeAwaiting = false;
         await deliver(rest);
       } else {
-        // Se a pessoa disser apenas o nome, aguarda a próxima frase.
         window.localWakeAwaiting = true;
         if (hint) hint.textContent = 'CHAMADA RECONHECIDA • FALE AGORA O COMANDO';
+        state('OUVINDO COMANDO');
       }
     } else if (window.localWakeAwaiting) {
       window.localWakeAwaiting = false;
+      await deliver(heard);
+    } else {
+      // Como o usuário já clicou para ativar o microfone, envie a fala
+      // reconhecida mesmo quando o Whisper não capturar a palavra de ativação.
       await deliver(heard);
     }
   } catch (error) {
@@ -142,7 +149,6 @@ async function startLocal() {
     processor.onaudioprocess = event => {
       if (!active || thisSession !== session) return;
       const channel = event.inputBuffer.getChannelData(0);
-      // Keep a bounded audio buffer while Whisper is busy so memory cannot grow without limit.
       if (!transcribing) {
         pending.push(new Float32Array(channel));
         sampleCount += channel.length;
@@ -184,8 +190,8 @@ async function startLocal() {
     if (!active || thisSession !== session) return;
     $('mic')?.classList.add('active');
     if ($('mic')) $('mic').innerHTML = '● <span class="mic-label">VOZ LOCAL ATIVA</span>';
-    if (hint) hint.textContent = 'VOZ LOCAL ATIVA • DIGA “SEXTA-FEIRA” E DEPOIS O SEU COMANDO';
-    state('AGUARDANDO SEXTA-FEIRA');
+    if (hint) hint.textContent = 'VOZ LOCAL ATIVA • FALE NORMALMENTE; NÃO PRECISA DIZER “SEXTA-FEIRA”';
+    state('OUVINDO COMANDOS');
   } catch (error) {
     stopLocal();
     const hint = $('hint');
@@ -206,7 +212,6 @@ window.startLocalWhisper = startLocal;
 window.stopLocalWhisper = stopByUser;
 window.localWakeSend = deliver;
 
-// Capture the click before the old browser-native recognition handler can run.
 $('mic')?.addEventListener('click', event => {
   event.preventDefault();
   event.stopImmediatePropagation();
