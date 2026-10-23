@@ -24,7 +24,7 @@ APPS={
  "discord":["cmd.exe","/c","start","","discord:"],"steam":["cmd.exe","/c","start","","steam:"],
  "vscode":["cmd.exe","/c","start","","code"],"word":["cmd.exe","/c","start","","winword"],
  "excel":["cmd.exe","/c","start","","excel"],"powerpoint":["cmd.exe","/c","start","","powerpnt"],
- "configurações":["cmd.exe","/c","start","","ms-settings:"],
+ "configuracoes":["cmd.exe","/c","start","","ms-settings:"],
  "terminal":["cmd.exe","/c","start","","wt.exe"],"prompt de comando":["cmd.exe","/c","start","","cmd.exe"],
  "cmd":["cmd.exe","/c","start","","cmd.exe"],"powershell":["cmd.exe","/c","start","","powershell.exe"]
 }
