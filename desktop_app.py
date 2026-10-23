@@ -18,6 +18,9 @@ REPO = "assistente-v1.0"
 BRANCH = "main"
 GITHUB_API = f"https://api.github.com/repos/{OWNER}/{REPO}/commits/{BRANCH}"
 RAW_BASE = f"https://raw.githubusercontent.com/{OWNER}/{REPO}/{BRANCH}"
+APP_HOST = "127.0.0.1"
+APP_PORT = 8765
+
 LOG_DIR = Path.home() / "AppData" / "Local" / "Sexta-Feira"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 UPDATE_STATE = LOG_DIR / "update-state.json"
@@ -146,7 +149,7 @@ def check_and_apply_updates():
 def port_open():
     with socket.socket() as sock:
         sock.settimeout(0.25)
-        return sock.connect_ex((HOST, PORT)) == 0
+        return sock.connect_ex((APP_HOST, APP_PORT)) == 0
 
 def main():
     # Executa antes de importar local_agent e antes de abrir a interface para carregar
