@@ -124,37 +124,50 @@ class Handler(SimpleHTTPRequestHandler):
   text=str(data.get("text","")).strip()[:1800]
   if not text:
    return self.send_json(400,{"error":"Não recebi texto para falar."})
-  # Prioridade: voz neural Kokoro feminina pt-BR, baixada e executada localmente.
+  # Prioridade real: vozes neurais online da Microsoft; Kokoro fica somente como reserva.
   try:
-   audio=_kokoro_wav(text)
-   content_type="audio/wav"
-  except Exception as local_error:
-   print("[Sexta-Feira] Kokoro local indisponível; tentando voz neural gratuita online: "+str(local_error)[:220])
+   import edge_tts
+  except ImportError:
    try:
+    install=subprocess.run([sys.executable,"-m","pip","install","--user","edge-tts"],capture_output=True,text=True,timeout=180)
+    if install.returncode!=0:
+     raise RuntimeError((install.stderr or install.stdout or "pip falhou")[-240:])
     import edge_tts
-   except ImportError:
-    try:
-     install=subprocess.run([sys.executable,"-m","pip","install","--user","edge-tts"],capture_output=True,text=True,timeout=180)
-     if install.returncode!=0:
-      return self.send_json(503,{"error":"Não consegui preparar a voz neural gratuita.","detail":(install.stderr or install.stdout or str(local_error))[-220:]})
-     import edge_tts
-    except Exception as e:
-     return self.send_json(503,{"error":"Não consegui preparar a voz neural gratuita.","detail":str(e)[:220]})
-   async def generate():
-    communicate=edge_tts.Communicate(text,voice="pt-BR-FranciscaNeural",rate="+0%",pitch="+0Hz")
+   except Exception as e:
+    print("[Sexta-Feira] Não consegui preparar Edge TTS: "+str(e)[:220])
+    edge_tts=None
+  audio=None
+  voice_used=None
+  if edge_tts is not None:
+   async def generate(voice):
+    communicate=edge_tts.Communicate(text,voice=voice,rate="-5%",pitch="+0Hz",volume="+0%")
     chunks=[]
     async for chunk in communicate.stream():
-     if chunk.get("type")=="audio": chunks.append(chunk.get("data",b""))
-    return b"".join(chunks)
-   try:
-    audio=asyncio.run(generate())
-    content_type="audio/mpeg"
-   except Exception as e:
-    return self.send_json(502,{"error":"Não consegui gerar o áudio neural local nem online.","detail":str(e)[:220]})
+     if chunk.get("type")=="audio":
+      chunks.append(chunk.get("data",b""))
+    result=b"".join(chunks)
+    if not result:
+     raise RuntimeError("A voz neural não retornou áudio.")
+    return result
+   for voice in ("pt-BR-FranciscaNeural","pt-BR-ThalitaMultilingualNeural"):
+    try:
+     audio=asyncio.run(generate(voice))
+     voice_used=voice
+     break
+    except Exception as e:
+     print("[Sexta-Feira] Falha na voz "+voice+": "+str(e)[:180])
   if not audio:
-   return self.send_json(502,{"error":"O mecanismo de voz não retornou áudio."})
+   try:
+    audio=_kokoro_wav(text)
+    voice_used="Kokoro Dora (reserva local)"
+    content_type="audio/wav"
+   except Exception as e:
+    return self.send_json(502,{"error":"As vozes neurais não puderam gerar áudio. Verifique a conexão com a internet e tente novamente.","detail":str(e)[:240]})
+  else:
+   content_type="audio/mpeg"
   self.send_response(200)
   self.send_header("Content-Type",content_type)
+  self.send_header("X-Voice-Name",voice_used or "Voz neural")
   self.send_header("Content-Length",str(len(audio)))
   self.send_header("Cache-Control","no-store")
   self.end_headers()
