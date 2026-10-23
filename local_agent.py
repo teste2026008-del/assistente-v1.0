@@ -86,8 +86,15 @@ class Handler(SimpleHTTPRequestHandler):
    return self.send_json(200,{"message":"Nota salva em "+str(p)})
   return self.send_json(400,{"error":"Comando ainda não implementado. Disponíveis: navegador, links, pesquisa web, aplicativos e pastas, informações do sistema, Git e anotações. Comandos arbitrários e destrutivos ficam bloqueados."})
 
+def run_local_server():
+ """Inicia o servidor local sem abrir navegador automaticamente."""
+ server=ThreadingHTTPServer((HOST,PORT),Handler)
+ server.serve_forever()
+
 if __name__=="__main__":
- print(f"Sexta-Feira Local: http://{HOST}:{PORT}");print("A IA e a voz continuam online. Feche esta janela para encerrar.")
+ print(f"Sexta-Feira Local: http://{HOST}:{PORT}")
+ print("Execute INICIAR-SEXTA-FEIRA.bat para abrir a interface.")
  try:
-  server=ThreadingHTTPServer((HOST,PORT),Handler);webbrowser.open(f"http://{HOST}:{PORT}");server.serve_forever()
- except KeyboardInterrupt:print("Encerrando.")
+  run_local_server()
+ except KeyboardInterrupt:
+  print("Encerrando.")
