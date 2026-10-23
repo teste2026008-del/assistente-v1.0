@@ -10,6 +10,8 @@ from local_agent import HOST, PORT, Handler
 
 LOG_DIR = Path.home() / "AppData" / "Local" / "Sexta-Feira"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+WEBVIEW_DATA_DIR = LOG_DIR / "webview-data"
+WEBVIEW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(filename=str(LOG_DIR / "app.log"), level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s", encoding="utf-8")
 
@@ -32,7 +34,7 @@ def main():
         webview.create_window("Sexta-Feira", f"http://{HOST}:{PORT}",
                               width=1180, height=820, min_size=(360, 560),
                               text_select=True)
-        webview.start(debug=False)
+        webview.start(debug=False, storage_path=str(WEBVIEW_DATA_DIR))
     except Exception:
         logging.exception("Erro ao abrir a janela da Sexta-Feira")
         raise
