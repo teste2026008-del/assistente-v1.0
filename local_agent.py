@@ -94,6 +94,7 @@ class Handler(SimpleHTTPRequestHandler):
    try:subprocess.Popen(cmd)
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o aplicativo: "+str(e)[:150]})
    return self.send_json(200,{"message":"Abri "+name+"."})
+  if k=="current_time":return self.send_json(200,{"message":"Agora são "+datetime.datetime.now().strftime("%H:%M")+" de "+datetime.datetime.now().strftime("%d/%m/%Y")+" (horário local do computador)."})
   if k=="system_info":return self.send_json(200,{"message":f"Computador: {platform.node()}\nSistema: {platform.platform()}\nPython: {platform.python_version()}\nPasta do agente: {ROOT}"})
   if k in ("git_status","git_log"):
    try:
