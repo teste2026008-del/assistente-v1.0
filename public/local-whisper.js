@@ -192,11 +192,10 @@ async function ensureModel(hint) {
           }
         }
       };
-      // Whisper Base melhora a transcrição de frases em português em relação ao Tiny.
-      // Usa WebGPU quando disponível e retorna à CPU (WASM) se o WebView não suportar.
+      // Usa Whisper Small na GPU para ganhar precisão; se a GPU falhar, recua para Whisper Base na CPU para não travar máquinas mais simples.
       if (navigator.gpu) {
         try {
-          const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', { ...options, device: 'webgpu' });
+          const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-small', { ...options, device: 'webgpu' });
           asr = model; return model;
         } catch (gpuError) {
           console.warn('WebGPU indisponível para Whisper Base; usando WASM.', gpuError);
