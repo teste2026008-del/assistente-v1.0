@@ -12,12 +12,13 @@ Assistente de programação em português brasileiro, com interface de conversa,
 
 ## Executar localmente no Windows
 
-1. Instale Python 3.11 ou superior e marque **Add Python to PATH**.
-2. Dê dois cliques em `INICIAR-SEXTA-FEIRA.bat`.
-3. A interface abre em `http://127.0.0.1:8765`. Feche a janela preta para encerrar.
-4. O reconhecimento Whisper do navegador baixa o modelo na primeira utilização. Chat e voz ainda usam o Worker online; esta versão não é totalmente offline.
+1. Baixe o ZIP pelo botão **Code → Download ZIP**.
+2. Instale Python 3.11+ e marque **Add Python to PATH**.
+3. Extraia o ZIP e execute `INICIAR-SEXTA-FEIRA.bat`.
+4. A interface abrirá em `http://127.0.0.1:8765`. Feche o terminal para encerrar.
+5. A IA e a voz continuam usando o Worker online. O Whisper pode baixar o modelo na primeira utilização.
 
-Comandos locais implementados: “abra o navegador”, “abra https://...”, “informações do sistema”, “status do git” e “crie uma nota: ...”. Por segurança, o agente só escuta no próprio computador e não executa comandos arbitrários. Integrações de GitHub/Cloudflare que alterem contas e projetos ainda não estão conectadas.
+Comandos locais: abrir navegador/link, pesquisar na web, abrir aplicativos básicos e pastas comuns, listar pastas, consultar informações do computador e status/histórico do Git, criar notas. Não executa comandos arbitrários nem ações destrutivas. Controle geral de mouse/teclado e integração autenticada para alterar projetos no GitHub/Cloudflare ainda exigem desenvolvimento e testes adicionais.
 
 ## Publicar no Cloudflare Workers
 
