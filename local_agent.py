@@ -54,7 +54,7 @@ class Handler(SimpleHTTPRequestHandler):
    try:data=json.loads(body or b"{}")
    except Exception:return self.send_json(400,{"error":"JSON inválido."})
    return self.action(data)
-  if p=="/api/tts": return self.send_json(410,{"error":"O serviço de voz online foi desativado porque tinha limite gratuito. A Sexta-Feira usa a voz local do Windows; atualize e reinicie o aplicativo."})
+  if p=="/api/tts": return self.send_json(410,{"error":"A interface antiga ainda tentou usar a voz online. Feche completamente a Sexta-Feira, execute o atualizador novamente e abra a janela nova."})
   if p=="/api/memory":
    try:data=json.loads(body or b"{}")
    except Exception:return self.send_json(400,{"error":"JSON inválido."})
