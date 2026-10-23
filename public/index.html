@@ -39,42 +39,31 @@ async function tryLocalAction(text){
  try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();return r.ok?(d.message||'Comando concluído.'):('Não consegui executar: '+(d.error||r.statusText))}
  catch(e){return 'Não consegui acessar o agente local: '+(e.message||e)}
 }
-function normalizeSpeech(s){return s.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim()}
-function startWakeListening(){
- if(!wakeEnabled||busy||speechPlaying||listening)return;
- const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SR){wakeEnabled=false;$('hint').textContent='Este navegador não oferece reconhecimento de voz compatível. O microfone pode estar liberado, mas o reconhecimento não está disponível.';setState('SISTEMA PRONTO');return}
- recognition=new SR();recognition.lang='pt-BR';recognition.interimResults=true;recognition.continuous=true;recognition.maxAlternatives=1;
- let handled=false,fatalError=false,startupTimer=null;
- recognition.onstart=()=>{clearTimeout(startupTimer);listening=true;$('mic').classList.add('active');$('mic').innerHTML='● <span class="mic-label">ESCUTANDO</span>';$('hint').textContent=awaitingCommand?'ESCUTANDO SUA MENSAGEM • SEXTA-FEIRA':'DIGA BOM DIA, BOA TARDE OU BOA NOITE, SEXTA-FEIRA';setState(awaitingCommand?'OUVINDO SUA MENSAGEM':'AGUARDANDO SEXTA-FEIRA')};
- recognition.onresult=e=>{let interim='';for(let i=e.resultIndex;i<e.results.length;i++){const raw=e.results[i][0].transcript.trim();if(!e.results[i].isFinal){interim+=raw+' ';continue}if(handled)continue;const clean=normalizeSpeech(raw);const wake=clean.match(/\b(bom dia|boa tarde|boa noite|ola|oi)\s+sexta feira\b/);if(wake){handled=true;const greeting=wake[0],rest=clean.slice(wake.index+wake[0].length).trim();awaitingCommand=!rest;if(rest)$('prompt').value=rest;try{recognition.stop()}catch{}send(rest?rest:greeting)}else if(awaitingCommand&&clean){handled=true;awaitingCommand=false;try{recognition.stop()}catch{}send(raw)}}if(interim.trim()){$('prompt').value=interim.trim();showLast('VOCÊ',interim.trim())}};
- recognition.onerror=e=>{const errors={'not-allowed':'O reconhecimento de voz foi bloqueado pelo Opera GX. Confira a permissão do microfone para o site.','service-not-allowed':'O Opera GX bloqueou o serviço de reconhecimento de voz. O microfone está liberado, mas o reconhecimento do navegador não.','network':'O serviço de reconhecimento de voz não conseguiu conectar à rede. Verifique a conexão e tente novamente.','audio-capture':'O navegador não conseguiu capturar o áudio do microfone. Confira as configurações de entrada do Windows.','language-not-supported':'O reconhecimento de voz deste navegador não oferece português brasileiro.','bad-grammar':'O reconhecimento de voz do navegador rejeitou a configuração de idioma.'};if(errors[e.error]){fatalError=true;wakeEnabled=false;clearTimeout(startupTimer);clearTimeout(restartTimer);$('hint').textContent=errors[e.error]+' (Código: '+e.error+')';setState('ERRO NO RECONHECIMENTO')}else if(e.error!=='no-speech'&&e.error!=='aborted'){$('hint').textContent='Erro no reconhecimento de voz: '+e.error}};
- recognition.onend=()=>{clearTimeout(startupTimer);listening=false;$('mic').classList.remove('active');$('mic').innerHTML='🎙 <span class="mic-label">ATIVAR VOZ</span>';if(wakeEnabled&&!fatalError&&!busy&&!speechPlaying){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,700)}else if(!wakeEnabled&&!fatalError)setState('SISTEMA PRONTO')};
- try{recognition.start();startupTimer=setTimeout(()=>{if(wakeEnabled&&!listening){fatalError=true;wakeEnabled=false;try{recognition.stop()}catch{}$('hint').textContent='O microfone está liberado, mas o Opera GX não iniciou o reconhecimento de voz. Isso é uma limitação/erro do serviço de voz do navegador, não da permissão do microfone.';setState('ERRO NO RECONHECIMENTO')}},6000)}catch(e){fatalError=true;wakeEnabled=false;$('hint').textContent='O Opera GX não conseguiu iniciar o reconhecimento de voz: '+(e.message||e.name||'erro desconhecido');setState('ERRO NO RECONHECIMENTO')}
-}
+// O reconhecimento nativo SpeechRecognition foi desativado porque falha com erro "network" no Opera/WebView.
 async function activateVoice(){
- const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(!SR){$('hint').textContent='O Opera GX não disponibilizou reconhecimento de voz. Atualize o navegador e tente novamente.';setState('SISTEMA PRONTO');return}
- if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('hint').textContent='O navegador não permite abrir o microfone nesta página. Confira as permissões do site no Opera GX.';setState('SISTEMA PRONTO');return}
- $('hint').textContent='Solicitando permissão real para usar o microfone…';
- try{
-  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-  stream.getTracks().forEach(track=>track.stop());
-  wakeEnabled=true;awaitingCommand=false;
-  $('hint').textContent='Microfone liberado. Iniciando reconhecimento de voz…';
-  startWakeListening();
-  clearTimeout(restartTimer);
-  restartTimer=setTimeout(()=>{if(wakeEnabled&&!listening){$('hint').textContent='O microfone foi liberado, mas o reconhecimento de voz não iniciou. Confira se o Opera GX permite reconhecimento de voz.';setState('ERRO NO RECONHECIMENTO')}},5000);
- }catch(e){
-  wakeEnabled=false;
-  const messages={NotAllowedError:'O Opera bloqueou a permissão do microfone. Libere o microfone nas configurações do site e confira também a permissão do Windows.',NotFoundError:'Não encontrei um microfone conectado ou habilitado no Windows.',NotReadableError:'O microfone está ocupado por outro aplicativo ou bloqueado pelo Windows.'};
-  $('hint').textContent=messages[e.name]||('Não consegui abrir o microfone: '+(e.message||e.name));
-  setState('SISTEMA PRONTO');
+ if(typeof window.startLocalWhisper==='function'){
+  await window.startLocalWhisper();
+  return;
  }
+ $('hint').textContent='O módulo de voz local ainda está carregando. Feche e abra novamente a Sexta-Feira e tente outra vez.';
+ setState('ERRO AO CARREGAR VOZ LOCAL');
 }
 $('mic').addEventListener('click',()=>{
- if(wakeEnabled){wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening){try{recognition.stop()}catch{}}$('mic').classList.remove('active');$('mic').innerHTML='🎙 <span class="mic-label">ATIVAR VOZ</span>';$('hint').textContent='ESCUTA DESATIVADA • NÃO INFORME SENHAS OU TOKENS';setState('SISTEMA PRONTO');return}
- activateVoice();
+ if(typeof window.startLocalWhisper==='function'){
+  if(window.localWhisperRunning&&typeof window.stopLocalWhisper==='function')window.stopLocalWhisper();
+  else activateVoice();
+ }else{
+  $('hint').textContent='O arquivo public/local-whisper.js não carregou. Atualize os arquivos da Sexta-Feira e abra o aplicativo novamente.';
+  setState('ERRO AO CARREGAR VOZ LOCAL');
+ }
 });
-$('stop').addEventListener('click',()=>{wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);if(recognition&&listening)recognition.stop();speechPlaying=false;if('speechSynthesis'in window)window.speechSynthesis.cancel();if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}currentUtterance=null;setState('SISTEMA PRONTO');$('hint').textContent='ESCUTA PARADA';});$('historyToggle').addEventListener('click',()=>$('history').classList.toggle('open'));
+$('stop').addEventListener('click',()=>{
+ if(typeof window.stopLocalWhisper==='function')window.stopLocalWhisper();
+ wakeEnabled=false;awaitingCommand=false;clearTimeout(restartTimer);
+ speechPlaying=false;
+ if('speechSynthesis'in window)window.speechSynthesis.cancel();
+ if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}
+ currentUtterance=null;setState('SISTEMA PRONTO');$('hint').textContent='ESCUTA PARADA';
+});
+$('historyToggle').addEventListener('click',()=>$('history').classList.toggle('open'));
 </script><script type="module" src="/local-whisper.js"></script></body></html>
