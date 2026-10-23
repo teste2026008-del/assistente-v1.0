@@ -1,6 +1,7 @@
 import { pipeline, env } from 'https://esm.sh/@huggingface/transformers@3.7.2?bundle';
 env.allowLocalModels = false;
 env.useBrowserCache = true;
+// O cache do navegador fica persistente no perfil WebView2 definido em desktop_app.py.
 
 const $ = id => document.getElementById(id);
 let asr = null, stream = null, audioContext = null, source = null, processor = null;
@@ -217,21 +218,21 @@ async function startLocal() {
     source.connect(processor);
     processor.connect(audioContext.destination);
 
-    if (hint) hint.textContent = 'Microfone ativo. Carregando reconhecimento local gratuito; na primeira vez pode demorar…';
-    state('CARREGANDO WHISPER LOCAL');
+    if (hint) hint.textContent = asr ? 'Reutilizando o modelo de voz já carregado…' : 'Preparando o modelo de voz local; depois de baixado, será reutilizado pelo cache do aplicativo…';
+    state(asr ? 'REUTILIZANDO MODELO DE VOZ' : 'CARREGANDO MODELO DE VOZ');
 
     if (!asr) {
       asr = await pipeline(
         'automatic-speech-recognition',
-        'onnx-community/whisper-tiny',
+        'onnx-community/whisper-base',
         {
           device: 'wasm',
           progress_callback: progress => {
             if (!active || thisSession !== session || !hint) return;
             if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
-              hint.textContent = 'Preparando modelo de voz (cache local): ' + Math.round(progress.progress) + '%';
+              hint.textContent = 'Preparando modelo de voz salvo no cache: ' + Math.round(progress.progress) + '%';
             } else if (progress?.status === 'download') {
-              hint.textContent = 'Primeira utilização: baixando modelo de voz. Nas próximas vezes, o cache do navegador será reutilizado quando disponível…';
+              hint.textContent = 'Baixando o modelo de voz pela primeira vez. O cache local persistente será reutilizado nas próximas aberturas…';
             }
           }
         }
