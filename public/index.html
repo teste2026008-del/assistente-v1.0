@@ -19,8 +19,33 @@ async function savePersistentMemory(){if(!localMode)return;try{await fetch('/api
 function buildContextualMessage(question){const facts=memoryFacts.slice(-40);const recent=memoryHistory.slice(-8);if(!facts.length&&!recent.length)return question;let ctx='CONTEXTO PERSISTENTE DA SEXTA-FEIRA (use apenas quando relevante; não invente fatos):\n';if(facts.length)ctx+='MEMÓRIAS CONFIRMADAS PELO USUÁRIO:\n'+facts.map((x,i)=>(i+1)+'. '+x).join('\n')+'\n';if(recent.length)ctx+='CONVERSA RECENTE:\n'+recent.map(x=>(x.role==='user'?'Usuário':'Sexta-Feira')+': '+x.text).join('\n')+'\n';ctx+='Responda em português brasileiro de forma direta e rápida, normalmente em 1 a 3 frases. Evite introduções longas. Interprete erros de reconhecimento pelo contexto e faça uma pergunta curta quando não entender. Nunca afirme que não tem acesso à hora atual sem tentar consultar o relógio local.\nPERGUNTA ATUAL: ';return ctx+question}
 loadPersistentMemory();
 const canvas=$('particles'),ctx=canvas.getContext('2d');let dots=[];
-function resize(){const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);dots=Array.from({length:100},()=>({a:Math.random()*Math.PI*2,r:.19+Math.random()*.36,s:.3+Math.random()*.9,z:Math.random()*2+.5,p:Math.random()*Math.PI*2}))}
-function draw(t){const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);for(const q of dots){q.a+=.0015*q.s;const pulse=$('scene').classList.contains('listening')?1.12:1,x=w/2+Math.cos(q.a+t*.00008*q.s)*w*q.r*.48*pulse,y=h/2+Math.sin(q.a*1.15+t*.00007*q.s)*h*q.r*.48*pulse;ctx.beginPath();ctx.fillStyle='rgba(255,166,54,'+(.18+.55*(.5+.5*Math.sin(t*.002+q.p)))+')';ctx.arc(x,y,q.z,0,Math.PI*2);ctx.fill()}requestAnimationFrame(draw)}
+function resize(){const r=canvas.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);dots=Array.from({length:180},()=>({a:Math.random()*Math.PI*2,r:.19+Math.random()*.36,s:.3+Math.random()*.9,z:Math.random()*2+.5,p:Math.random()*Math.PI*2}))}
+function draw(t){
+ const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);
+ const points=[],pulse=$('scene').classList.contains('listening')?1.12:1;
+ for(const q of dots){
+  q.a+=.0015*q.s;
+  const x=w/2+Math.cos(q.a+t*.00008*q.s)*w*q.r*.48*pulse;
+  const y=h/2+Math.sin(q.a*1.15+t*.00007*q.s)*h*q.r*.48*pulse;
+  points.push({x,y,z:q.z,p:q.p});
+ }
+ // Linhas finas entre partículas criam uma malha holográfica dourada, não uma esfera sólida.
+ ctx.lineWidth=.55;
+ for(let i=0;i<points.length;i++){
+  for(let j=i+1;j<points.length;j++){
+   const dx=points[i].x-points[j].x,dy=points[i].y-points[j].y,d=Math.hypot(dx,dy);
+   if(d<31){
+    ctx.strokeStyle='rgba(255,151,42,'+((1-d/31)*.24)+')';
+    ctx.beginPath();ctx.moveTo(points[i].x,points[i].y);ctx.lineTo(points[j].x,points[j].y);ctx.stroke();
+   }
+  }
+ }
+ for(const p of points){
+  ctx.beginPath();ctx.fillStyle='rgba(255,184,75,'+(.25+.65*(.5+.5*Math.sin(t*.002+p.p)))+')';
+  ctx.arc(p.x,p.y,p.z,0,Math.PI*2);ctx.fill();
+ }
+ requestAnimationFrame(draw)
+}
 new ResizeObserver(resize).observe(canvas);resize();requestAnimationFrame(draw);
 function setState(s){$('status').textContent=s;$('led').style.background=s.includes('OUVINDO')?'#ffcb69':s.includes('PENSANDO')?'#e9a74c':'#ffad42';$('scene').classList.toggle('listening',s.includes('OUVINDO'));$('scene').classList.toggle('speaking',s.includes('FALANDO'))}
 function bubble(who,text){const box=document.createElement('div'),b=document.createElement('b'),span=document.createElement('div');box.className='bubble';b.textContent=who;span.textContent=text;box.append(b,span);$('history').appendChild(box);$('history').scrollTop=$('history').scrollHeight}
