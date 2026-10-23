@@ -106,7 +106,12 @@ class Handler(SimpleHTTPRequestHandler):
   if k=="open_app":
    name=normalize_key(d.get("name", ""));cmd=APPS.get(name)
    if not cmd:return self.send_json(400,{"error":"Aplicativo não permitido. Posso abrir apenas programas da lista segura."})
-   try:subprocess.Popen(cmd)
+   try:
+    if name=="calculadora":
+     # O app Calculadora moderno pode não abrir diretamente por calc.exe em algumas instalações.
+     try:os.startfile("calculator:")
+     except Exception:subprocess.Popen(["calc.exe"],shell=False)
+    else:subprocess.Popen(cmd)
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o aplicativo: "+str(e)[:150]})
    return self.send_json(200,{"message":"Solicitei ao Windows que abra "+name+"."})
   if k=="current_time":return self.send_json(200,{"message":"Agora são "+datetime.datetime.now().strftime("%H:%M")+" de "+datetime.datetime.now().strftime("%d/%m/%Y")+" (horário local do computador)."})
