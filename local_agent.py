@@ -227,6 +227,22 @@ class Handler(SimpleHTTPRequestHandler):
   return self.send_json(200,{"ok":True,"facts":len(facts),"history":len(history)})
  def action(self,d):
   k=d.get("type")
+  if k=="create_reminder":
+   text=str(d.get("text","")).strip()[:300]
+   try: minutes=int(d.get("minutes",0))
+   except (TypeError,ValueError): minutes=0
+   if not text or minutes<1 or minutes>525600:return self.send_json(400,{"error":"Diga o lembrete e um prazo entre 1 minuto e 365 dias."})
+   items=self.reminders_read(); due=(datetime.datetime.now()+datetime.timedelta(minutes=minutes)).astimezone().isoformat(timespec="seconds")
+   item={"id":str(int(datetime.datetime.now().timestamp()*1000)),"text":text,"due":due,"done":False};items.append(item)
+   try: REMINDERS_FILE.write_text(json.dumps(items[-100:],ensure_ascii=False,indent=2),encoding="utf-8")
+   except OSError as e:return self.send_json(500,{"error":"Não consegui salvar o lembrete: "+str(e)[:120]})
+   return self.send_json(200,{"message":f"Anotado. Vou lembrar você de {text} em {minutes} minutos, às {due[11:16]}."})
+  if k=="list_reminders":
+   items=[x for x in self.reminders_read() if not x.get("done")]
+   if not items:return self.send_json(200,{"message":"Você não tem lembretes pendentes."})
+   lines=[]
+   for x in items[:20]: lines.append(str(x.get("due",""))[:16].replace("T"," às ")+" — "+str(x.get("text","")))
+   return self.send_json(200,{"message":"Seus lembretes pendentes:\n"+"\n".join(lines)})
   if k=="youtube_search":
    q=str(d.get("query","")).strip()[:250]
    if not q:return self.send_json(400,{"error":"Diga o nome da música ou artista."})
