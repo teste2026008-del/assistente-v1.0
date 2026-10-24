@@ -15,6 +15,11 @@ MEMORY_FILE=MEMORY_DIR/"memoria.json"
 REMINDERS_FILE=MEMORY_DIR/"lembretes.json"
 MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
+# Controle de navegador isolado, iniciado somente quando o usuário pedir.
+_BROWSER_PLAYWRIGHT=None
+_BROWSER_CONTEXT=None
+_BROWSER_PAGE=None
+_BROWSER_LOCK=Lock()
 TTS_DIR=MEMORY_DIR/"models"/"kokoro"
 TTS_MODEL=TTS_DIR/"kokoro-v1.0.onnx"
 TTS_VOICES=TTS_DIR/"voices-v1.0.bin"
@@ -239,8 +244,89 @@ class Handler(SimpleHTTPRequestHandler):
   except OSError as e:
    return self.send_json(500,{"error":"Não consegui salvar a memória local: "+str(e)[:160]})
   return self.send_json(200,{"ok":True,"facts":len(facts),"history":len(history)})
+ def browser_action(self,d):
+  global _BROWSER_PLAYWRIGHT,_BROWSER_CONTEXT,_BROWSER_PAGE
+  kind=str(d.get("type",""))
+  with _BROWSER_LOCK:
+   try:
+    if kind=="browser_start":
+     if _BROWSER_PAGE is not None:
+      return self.send_json(200,{"message":"O navegador controlável já está aberto. Diga o endereço ou a próxima ação."})
+     try:
+      from playwright.sync_api import sync_playwright
+     except ImportError:
+      install=subprocess.run([sys.executable,"-m","pip","install","--user","playwright"],capture_output=True,text=True,timeout=240)
+      if install.returncode!=0:return self.send_json(503,{"error":"Não consegui instalar o controlador do navegador. "+(install.stderr or install.stdout or "Confira a conexão.")[-240:]})
+      try: from playwright.sync_api import sync_playwright
+      except ImportError:return self.send_json(503,{"error":"O controlador Playwright não ficou disponível após a instalação."})
+     _BROWSER_PLAYWRIGHT=sync_playwright().start()
+     launch_errors=[]
+     for channel in ("msedge","chrome",None):
+      try:
+       options={"headless":False}
+       if channel: options["channel"]=channel
+       _BROWSER_CONTEXT=_BROWSER_PLAYWRIGHT.chromium.launch_persistent_context(str(MEMORY_DIR/"browser-profile"),**options)
+       break
+      except Exception as e:launch_errors.append(str(e)[:180])
+     if _BROWSER_CONTEXT is None:
+      try:_BROWSER_PLAYWRIGHT.stop()
+      except Exception:pass
+      _BROWSER_PLAYWRIGHT=None
+      return self.send_json(503,{"error":"Não encontrei Chrome/Edge compatível nem o Chromium do Playwright. Instale Google Chrome ou Microsoft Edge e tente novamente. Detalhe: "+" | ".join(launch_errors)[-320:]})
+     _BROWSER_PAGE=_BROWSER_CONTEXT.pages[0] if _BROWSER_CONTEXT.pages else _BROWSER_CONTEXT.new_page()
+     _BROWSER_PAGE.goto("https://www.google.com",wait_until="domcontentloaded",timeout=30000)
+     return self.send_json(200,{"message":"Abri uma janela de navegador controlável. Agora posso navegar, ler a página e interagir com campos e botões."})
+    if kind=="browser_stop":
+     if _BROWSER_CONTEXT is not None:_BROWSER_CONTEXT.close()
+     if _BROWSER_PLAYWRIGHT is not None:_BROWSER_PLAYWRIGHT.stop()
+     _BROWSER_CONTEXT=None;_BROWSER_PAGE=None;_BROWSER_PLAYWRIGHT=None
+     return self.send_json(200,{"message":"Fechei a sessão de navegador controlável."})
+    if _BROWSER_PAGE is None:return self.send_json(409,{"error":"O navegador controlável ainda não foi iniciado. Peça para iniciar o navegador primeiro."})
+    if kind=="browser_navigate":
+     url=str(d.get("url","")).strip()
+     u=urlparse(url if "://" in url else "https://"+url)
+     if u.scheme not in ("http","https") or not u.netloc:return self.send_json(400,{"error":"Informe um endereço HTTP ou HTTPS válido."})
+     _BROWSER_PAGE.goto(u.geturl(),wait_until="domcontentloaded",timeout=30000)
+     return self.send_json(200,{"message":"Naveguei para "+_BROWSER_PAGE.url,"url":_BROWSER_PAGE.url})
+    if kind=="browser_snapshot":
+     title=_BROWSER_PAGE.title()
+     page_text=_BROWSER_PAGE.locator("body").inner_text(timeout=8000)[:10000]
+     return self.send_json(200,{"message":"Página: "+title+"\nEndereço: "+_BROWSER_PAGE.url+"\nConteúdo visível:\n"+page_text,"url":_BROWSER_PAGE.url,"title":title})
+    if kind=="browser_click":
+     target=str(d.get("target","")).strip()[:250]
+     if not target:return self.send_json(400,{"error":"Diga o texto do botão ou link em que devo clicar."})
+     loc=_BROWSER_PAGE.get_by_role("button",name=target,exact=False)
+     if loc.count()==0:loc=_BROWSER_PAGE.get_by_role("link",name=target,exact=False)
+     if loc.count()==0:loc=_BROWSER_PAGE.get_by_text(target,exact=False)
+     if loc.count()==0:return self.send_json(404,{"error":"Não encontrei botão ou link com esse texto: "+target})
+     loc.first.click(timeout=10000)
+     return self.send_json(200,{"message":"Cliquei em: "+target})
+    if kind=="browser_fill":
+     target=str(d.get("target","")).strip()[:250];value=str(d.get("value",""))[:4000]
+     if not target:return self.send_json(400,{"error":"Diga o nome ou rótulo do campo que devo preencher."})
+     loc=_BROWSER_PAGE.get_by_label(target,exact=False)
+     if loc.count()==0:loc=_BROWSER_PAGE.get_by_placeholder(target,exact=False)
+     if loc.count()==0:loc=_BROWSER_PAGE.get_by_role("textbox",name=target,exact=False)
+     if loc.count()==0:return self.send_json(404,{"error":"Não encontrei campo identificado como: "+target})
+     loc.first.fill(value,timeout=10000)
+     return self.send_json(200,{"message":"Preenchi o campo "+target+". Confira os dados antes de enviar."})
+    if kind=="browser_type":
+     value=str(d.get("text",""))[:4000]
+     if not value:return self.send_json(400,{"error":"Diga o texto que devo digitar."})
+     _BROWSER_PAGE.locator(":focus").press_sequentially(value,timeout=8000)
+     return self.send_json(200,{"message":"Digitei o texto no campo que está selecionado."})
+    if kind=="browser_press":
+     key=str(d.get("key","")).strip().lower()
+     allowed={"enter":"Enter","tab":"Tab","escape":"Escape","esc":"Escape","space":"Space","seta para baixo":"ArrowDown","baixo":"ArrowDown","seta para cima":"ArrowUp"}
+     if key not in allowed:return self.send_json(400,{"error":"Tecla não permitida. Use Enter, Tab, Escape ou setas."})
+     _BROWSER_PAGE.keyboard.press(allowed[key])
+     return self.send_json(200,{"message":"Pressionei "+allowed[key]+"."})
+   except Exception as e:
+    return self.send_json(500,{"error":"Falha no controle do navegador: "+str(e)[:260]})
  def action(self,d):
   k=d.get("type")
+  if k in ("browser_start","browser_navigate","browser_snapshot","browser_click","browser_fill","browser_type","browser_press","browser_stop"):
+   return self.browser_action(d)
   if k=="create_reminder":
    text=str(d.get("text","")).strip()[:300]
    try: minutes=int(d.get("minutes",0))
