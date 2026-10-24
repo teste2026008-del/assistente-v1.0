@@ -262,6 +262,26 @@ class Handler(SimpleHTTPRequestHandler):
     if rain is not None:message+=f". Precipitação atual: {rain:g} mm"
     return self.send_json(200,{"message":message+"."})
    except Exception as e:return self.send_json(502,{"error":"Não consegui consultar o tempo agora. Verifique a conexão e tente novamente.","detail":str(e)[:180]})
+  if k=="battery_info":
+   try:
+    if os.name=="nt":
+     import ctypes
+     class BatteryStatus(ctypes.Structure):
+      _fields_=[("ACLineStatus",ctypes.c_byte),("BatteryFlag",ctypes.c_byte),("BatteryLifePercent",ctypes.c_byte),("SystemStatusFlag",ctypes.c_byte),("BatteryLifeTime",ctypes.c_uint32),("BatteryFullLifeTime",ctypes.c_uint32)]
+     status=BatteryStatus()
+     if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)): raise OSError("Não foi possível consultar a bateria.")
+     if status.BatteryLifePercent<=100: message="Bateria em "+str(status.BatteryLifePercent)+" por cento."
+     else: message="O Windows não informou a porcentagem da bateria."
+     message += " Conectado à tomada." if status.ACLineStatus==1 else (" Funcionando na bateria." if status.ACLineStatus==0 else "")
+     return self.send_json(200,{"message":message})
+    return self.send_json(200,{"message":"A consulta detalhada da bateria está disponível no Windows."})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui consultar a bateria: "+str(e)[:150]})
+  if k=="lock_screen":
+   if os.name!="nt":return self.send_json(400,{"error":"Esse comando está disponível no Windows."})
+   try:
+    subprocess.Popen(["rundll32.exe","user32.dll,LockWorkStation"],creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    return self.send_json(200,{"message":"Vou bloquear a tela do computador agora."})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui bloquear a tela: "+str(e)[:150]})
   if k=="current_time":return self.send_json(200,{"message":"Agora são "+datetime.datetime.now().strftime("%H:%M")+" de "+datetime.datetime.now().strftime("%d/%m/%Y")+" (horário local do computador)."})
   if k=="system_info":return self.send_json(200,{"message":f"Computador: {platform.node()}\nSistema: {platform.platform()}\nPython: {platform.python_version()}\nPasta do agente: {ROOT}"})
   if k in ("git_status","git_log"):
