@@ -136,7 +136,10 @@ async function tryLocalAction(text){
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar|mata|finaliza|finalize)\s+(?:completamente\s+)?(?:(?:o|a)\s+)?(?:(?:aplicativo|programa|janela)\s+(?:da|do|de)\s+)?(.+?)(?:\s+(?:completamente|totalmente|de vez|por completo))?$/i))){
    let target=m[1].replace(/^(?:o|a|meu|minha)\s+/,'').trim();
    if(/^(?:aplicativo|programa|janela|app)$/i.test(target))target=localStorage.getItem('sextaLastApp')||'';
-   const app=findApp(target);
+   let app=findApp(target);
+   if(!app&&/^(?:aplicativo|programa|app|janela)(?:\s+(?:total|totalmente|completamente|de vez|por completo))?$/.test(target)){
+     app=localStorage.getItem('sextaLastApp')||'';
+   }
    if(app){localStorage.setItem('sextaLastApp',app);action={type:'close_app',name:app}}
  }
  else if(/^(?:sexta feira[, ]*)?(?:que horas sao|que hora sao|que horas e|que hora e|qual e a hora|me fala a hora|me diga a hora|horas agora|hora atual|qual o horario)[?!. ]*$/i.test(s))action={type:'current_time'};
