@@ -140,6 +140,12 @@ async function tryLocalAction(text){
  else if(/^(?:sexta feira[, ]*)?(?:ultimos commits|historico do git|git log)$/i.test(s))action={type:'git_log'};
  else if(/^(?:sexta feira[, ]*)?(?:informacoes do sistema|info do computador|status do computador)$/i.test(s))action={type:'system_info'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:liste|listar|mostre) (?:os arquivos de )?(downloads|documentos|area de trabalho|desktop)$/i)))action={type:'list_folder',name:m[1]};
+
+ else if(/^(?:sexta feira[, ]*)?(?:quanto de bateria tem|qual a bateria|nivel da bateria|porcentagem da bateria|como esta a bateria|bateria do computador)[?!. ]*$/i.test(s))action={type:'battery_info'};
+ else if(/^(?:sexta feira[, ]*)?(?:bloqueie a tela|bloquear a tela|bloqueia o computador|bloquear o computador|trave a tela|travar a tela)[?!. ]*$/i.test(s))action={type:'lock_screen'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abra|abre|abrir|acesse|acessar)\s+(?:a pasta )?(downloads|documentos|area de trabalho|desktop|imagens|musicas|musica|videos|video|fotos)$/i)))action={type:'open_folder',name:m[1]};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:pesquise|pesquisar|procure|buscar|busque|pesquisa na internet|pesquise na internet)\s+(?:sobre )?(.+)$/i)))action={type:'web_search',query:m[1]};
+
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:noticias de hoje|ultimas noticias|me de as noticias|quais sao as noticias|noticias)\s*$/i)))action={type:'web_search',query:'últimas notícias de hoje Brasil'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abra|abre|abrir|acesse|acessar)\s+(youtube|gmail|google drive|google maps|google calendario|calendario|tradutor|google tradutor)$/i))){
    const sites={'youtube':'https://www.youtube.com','gmail':'https://mail.google.com','google drive':'https://drive.google.com','google maps':'https://maps.google.com','google calendario':'https://calendar.google.com','calendario':'https://calendar.google.com','tradutor':'https://translate.google.com','google tradutor':'https://translate.google.com'};
