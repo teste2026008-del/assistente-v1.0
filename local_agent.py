@@ -102,6 +102,7 @@ class Handler(SimpleHTTPRequestHandler):
   p=urlparse(self.path).path
   if p=="/api/health": return self.send_json(200,{"ok":True,"service":"Sexta-Feira Local","host":HOST,"port":PORT})
   if p=="/api/memory": return self.memory_get()
+  if p=="/api/reminders/check": return self.reminders_check()
   if p=="/api/reminders": return self.reminders_get()
   if p.startswith("/api/"): return self.proxy(p,b"","GET")
   return super().do_GET()
@@ -191,6 +192,19 @@ class Handler(SimpleHTTPRequestHandler):
    data=json.loads(REMINDERS_FILE.read_text(encoding="utf-8"))
    return data if isinstance(data,list) else []
   except (OSError,ValueError,TypeError): return []
+ def reminders_check(self):
+  items=self.reminders_read();now=datetime.datetime.now().astimezone();due=[];changed=False
+  for item in items:
+   if item.get("done"): continue
+   try: when=datetime.datetime.fromisoformat(str(item.get("due","")))
+   except ValueError: continue
+   if when.tzinfo is None: when=when.astimezone()
+   if when<=now:
+    item["done"]=True;due.append({"id":item.get("id",""),"text":item.get("text","")});changed=True
+  if changed:
+   try: REMINDERS_FILE.write_text(json.dumps(items,ensure_ascii=False,indent=2),encoding="utf-8")
+   except OSError: pass
+  return self.send_json(200,{"due":due})
  def reminders_get(self):
   return self.send_json(200,{"reminders":self.reminders_read()})
  def reminders_save(self,d):
