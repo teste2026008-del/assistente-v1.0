@@ -262,6 +262,30 @@ class Handler(SimpleHTTPRequestHandler):
     if rain is not None:message+=f". Precipitação atual: {rain:g} mm"
     return self.send_json(200,{"message":message+"."})
    except Exception as e:return self.send_json(502,{"error":"Não consegui consultar o tempo agora. Verifique a conexão e tente novamente.","detail":str(e)[:180]})
+  if k=="media_control":
+   command=normalize_key(d.get("command",""))
+   keys={"volume_up":0xAF,"volume_down":0xAE,"volume_mute":0xAD,"play_pause":0xB3,"next_track":0xB0,"previous_track":0xB1}
+   messages={"volume_up":"Aumentei o volume.","volume_down":"Diminuí o volume.","volume_mute":"Alternei o mudo do volume.","play_pause":"Enviei o comando de reproduzir ou pausar.","next_track":"Pulei para a próxima faixa.","previous_track":"Voltei para a faixa anterior."}
+   if command not in keys:return self.send_json(400,{"error":"Controle de mídia não reconhecido."})
+   if os.name!="nt":return self.send_json(400,{"error":"O controle de mídia está disponível nesta versão para Windows."})
+   try:
+    import ctypes
+    KEYEVENTF_KEYUP=0x0002
+    class KEYBDINPUT(ctypes.Structure):
+     _fields_=[("wVk",ctypes.c_ushort),("wScan",ctypes.c_ushort),("dwFlags",ctypes.c_ulong),("time",ctypes.c_ulong),("dwExtraInfo",ctypes.POINTER(ctypes.c_ulong))]
+    class INPUTUNION(ctypes.Union):
+     _fields_=[("ki",KEYBDINPUT)]
+    class INPUT(ctypes.Structure):
+     _fields_=[("type",ctypes.c_ulong),("union",INPUTUNION)]
+    extra=ctypes.c_ulong(0)
+    key=keys[command]
+    events=(INPUT*2)()
+    events[0].type=1;events[0].union.ki=KEYBDINPUT(key,0,0,0,ctypes.pointer(extra))
+    events[1].type=1;events[1].union.ki=KEYBDINPUT(key,0,KEYEVENTF_KEYUP,0,ctypes.pointer(extra))
+    sent=ctypes.windll.user32.SendInput(2,ctypes.byref(events),ctypes.sizeof(INPUT))
+    if sent!=2:raise OSError("O Windows não aceitou o comando de mídia.")
+    return self.send_json(200,{"message":messages[command]})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui controlar o volume ou a mídia: "+str(e)[:150]})
   if k=="battery_info":
    try:
     if os.name=="nt":
