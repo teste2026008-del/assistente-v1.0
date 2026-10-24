@@ -154,6 +154,7 @@ async function tryLocalAction(text){
    const previous=localStorage.getItem('sextaLastApp')||'';
    if(previous)action={type:'close_app',name:previous};
  }
+ if(!action){
  if((m=s.match(/^(?:sexta feira[, ]*)?(?:como esta o tempo|como esta o clima|qual a previsao do tempo|previsao do tempo|clima|tempo) (?:em|para|na cidade de) (.+)$/i)))action={type:'weather',city:m[1].trim()};
  if(/^(?:sexta feira[, ]*)?(?:inicie|iniciar|abra|abrir|ligue|iniciar o|abra o)? ?(?:navegador controlavel|controle do navegador|navegador para automacao)[!. ]*$/i.test(s))action={type:'browser_start'};
  else if(/^(?:sexta feira[, ]*)?(?:leia|ler|resuma|resumir|mostre|mostrar) (?:o conteudo d[ao] pagina|a pagina|o que tem na pagina|o conteudo do site)[!. ]*$/i.test(s))action={type:'browser_snapshot'};
@@ -210,6 +211,7 @@ async function tryLocalAction(text){
  else if(/^(?:sexta feira[, ]*)?(?:quais sao meus lembretes|liste os lembretes|listar lembretes|meus lembretes|lembretes pendentes)[?!. ]*$/i.test(s))action={type:'list_reminders'};
  else if(/^(?:sexta feira[, ]*)?(?:tire uma captura de tela|capturar a tela|capture a tela|abrir captura de tela|abra a ferramenta de captura|print da tela)[?!. ]*$/i.test(s))action={type:'screenshot'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:faca uma previa de organizacao|organize|organizar|analise) (?:a pasta )?(downloads|documentos|area de trabalho|desktop)[?!. ]*$/i)))action={type:'organize_preview',name:m[1]};
+ }
  if(!action)return null;
  if(action.type==="open_app"||action.type==="close_app")localStorage.setItem("sextaLastApp",action.name);
  try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();return r.ok?(d.message||'Comando concluído.'):('Não consegui executar: '+(d.error||r.statusText))}
