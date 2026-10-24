@@ -73,7 +73,7 @@ async function tryLocalAction(text){
  const norm=v=>String(v||'').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.,!?;:]/g,' ').replace(/\s+/g,' ').trim();
  const s=norm(original);let action=null;let m;
  const prefix='(?:sexta feira[, ]*)?';
- const verb='(?:abra|abre|abrir|inicie|inicia|iniciar|execute|executa|executar|rode|roda|rodar|lance|lança|lancar|acesse|acessa|acessar|entre em|entra em|entrar em|vai para|ir para|inicie|iniciar)';
+ const verb='(?:abra|abre|abrir|inicie|inicia|iniciar|comece|comeca|começar|execute|executa|executar|rode|roda|rodar|lance|lança|lancar|acesse|acessa|acessar|entre em|entra em|entrar em|entre no|entra no|entrar no|vá para|vai para|ir para|inicie|iniciar)';
  const optional='(?:(?:a|o|as|os|minha|minhas|meu|meus|uma|um|do|da|dos|das) )?';
  const editDistance=(a,b)=>{
    const prev=Array.from({length:b.length+1},(_,i)=>i);
@@ -129,7 +129,7 @@ async function tryLocalAction(text){
  }
  if((m=s.match(/^(?:sexta feira[, ]*)?(?:como esta o tempo|como esta o clima|qual a previsao do tempo|previsao do tempo|clima|tempo) (?:em|para|na cidade de) (.+)$/i)))action={type:'weather',city:m[1].trim()};
  if(/^(?:sexta feira[, ]*)?(?:que horas sao|que hora e|qual e a hora|que dia e hoje|qual a data de hoje|data e hora atual)[?!. ]*$/i.test(s))action={type:'current_time'};
- else if((m=original.match(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir|acesse|acessa|acessar|entre em|entra em|entrar em|vai para|ir para|abre o link)\s+(https?:\/\/\S+)$/i)))action={type:'open_url',url:m[1]};
+ else if((m=original.match(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir|inicie|inicia|iniciar|acesse|acessa|acessar|entre em|entra em|entrar em|entre no|entra no|entrar no|vá para|vai para|ir para|abre o link)\s+(https?:\/\/\S+)$/i)))action={type:'open_url',url:m[1]};
  else if(/^(?:sexta feira[, ]*)?(?:aumente|aumentar|aumenta|suba|subir) (?:o )?volume[!. ]*$/i.test(s))action={type:'media_control',command:'volume_up'};
  else if(/^(?:sexta feira[, ]*)?(?:diminua|diminuir|diminui|abaixe|abaixar|abaixa) (?:o )?volume[!. ]*$/i.test(s))action={type:'media_control',command:'volume_down'};
  else if(/^(?:sexta feira[, ]*)?(?:silencie|silenciar|mute|coloque no mudo|ative o mudo|ative o som|tirar do mudo|retire do mudo)[!. ]*$/i.test(s))action={type:'media_control',command:'volume_mute'};
