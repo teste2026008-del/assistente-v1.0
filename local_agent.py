@@ -351,7 +351,8 @@ class Handler(SimpleHTTPRequestHandler):
   if k=="youtube_search":
    q=str(d.get("query","")).strip()[:250]
    if not q:return self.send_json(400,{"error":"Diga o nome da música ou artista."})
-   if normalize_key(q) in ("musica","uma musica","alguma musica","musicas","uma musica boa","musicas boas"):q="músicas populares brasileiras"
+   q=q.strip().strip('.,!?;:')
+   if normalize_key(q) in ("musica","uma musica","alguma musica","musicas","uma musica boa","musicas boas","qualquer musica","uma musica qualquer","alguma musica brasileira","video","um video","qualquer video"):q="músicas populares brasileiras"
    url="https://www.youtube.com/results?search_query="+quote_plus(q)
    try:
     opened=webbrowser.open(url,new=2)
