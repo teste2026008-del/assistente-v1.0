@@ -165,6 +165,13 @@ async function tryLocalAction(text){
    action={type:'open_url',url:sites[m[1]]};
  }
  else if((m=original.match(/^(?:sexta-feira[, ]*)?(?:crie|criar|anote) (?:uma )?(?:anotação|nota)[: ]+(.+)$/i)))action={type:'create_note',text:m[1]};
+
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:me lembre|lembre me|me lembrar|crie um lembrete|criar lembrete) (?:de |para )?(.+?) em (\\d+) (minuto|minutos|hora|horas|dia|dias)[.! ]*$/i))){
+   let minutes=Number(m[2]);if(/^hora/i.test(m[3]))minutes*=60;else if(/^dia/i.test(m[3]))minutes*=1440;
+   action={type:'create_reminder',text:m[1].trim(),minutes};
+ }
+ else if(/^(?:sexta feira[, ]*)?(?:quais sao meus lembretes|liste os lembretes|listar lembretes|meus lembretes|lembretes pendentes)[?!. ]*$/i.test(s))action={type:'list_reminders'};
+ else if(/^(?:sexta feira[, ]*)?(?:tire uma captura de tela|capturar a tela|capture a tela|abrir captura de tela|abra a ferramenta de captura|print da tela)[?!. ]*$/i.test(s))action={type:'screenshot'};
  if(!action)return null;
  try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();return r.ok?(d.message||'Comando concluído.'):('Não consegui executar: '+(d.error||r.statusText))}
  catch(e){return 'Não consegui acessar o agente local: '+(e.message||e)}
