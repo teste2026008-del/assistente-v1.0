@@ -407,6 +407,14 @@ class Handler(SimpleHTTPRequestHandler):
    if not p.exists():return self.send_json(200,{"message":"A pasta ainda não existe: "+str(p)})
    entries=sorted(p.iterdir(),key=lambda x:(not x.is_dir(),x.name.lower()))[:60]
    return self.send_json(200,{"message":"Conteúdo de "+str(p)+":\n"+("\n".join(("📁 " if x.is_dir() else "📄 ")+x.name for x in entries) if entries else "Pasta vazia.")})
+  if k=="organize_preview":
+   name=normalize_key(d.get("name","downloads"));p=FOLDERS.get(name)
+   if not p:return self.send_json(400,{"error":"Escolha uma pasta permitida, como Downloads, Documentos ou Área de Trabalho."})
+   if not p.exists():return self.send_json(200,{"message":"A pasta ainda não existe: "+str(p)})
+   files=[x for x in p.iterdir() if x.is_file()];groups={"Imagens":{".jpg",".jpeg",".png",".gif",".webp",".bmp",".heic"},"Vídeos":{".mp4",".mov",".mkv",".avi",".webm"},"Áudio":{".mp3",".wav",".m4a",".flac",".ogg"},"Documentos":{".pdf",".doc",".docx",".txt",".rtf",".xls",".xlsx",".ppt",".pptx"},"Compactados":{".zip",".rar",".7z",".tar",".gz"}}
+   counts={label:sum(1 for f in files if f.suffix.lower() in exts) for label,exts in groups.items()};counts["Outros"]=sum(1 for f in files if not any(f.suffix.lower() in exts for exts in groups.values()))
+   summary="Prévia de organização de "+str(p)+": "+str(len(files))+" arquivos. "+"; ".join(k+": "+str(v) for k,v in counts.items())+". Não movi nem alterei nenhum arquivo."
+   return self.send_json(200,{"message":summary})
   if k=="create_note":
    note=str(d.get("text","")).strip()
    if not note:return self.send_json(400,{"error":"A nota está vazia."})
