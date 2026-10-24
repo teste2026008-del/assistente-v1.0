@@ -219,6 +219,26 @@ async function tryLocalAction(text){
  catch(e){return 'Não consegui acessar o agente local: '+(e.message||e)}
 }
 // O reconhecimento nativo SpeechRecognition foi desativado porque falha com erro "network" no Opera/WebView.
+// Atualizações web em segundo plano: recarrega a interface apenas quando um novo pacote foi aplicado.
+let webUpdateCommit=null;
+async function checkBackgroundUpdates(){
+ try{
+  const r=await fetch('/api/update/status',{cache:'no-store'});
+  if(!r.ok)return;
+  const data=await r.json();
+  if(!data.commit)return;
+  if(webUpdateCommit===null){webUpdateCommit=data.commit;return;}
+  if(data.commit!==webUpdateCommit){
+   webUpdateCommit=data.commit;
+   $('hint').textContent=data.restart_required
+    ?'Atualização da interface aplicada. Uma atualização do núcleo será concluída na próxima abertura.'
+    :'Atualização aplicada automaticamente.';
+   setTimeout(()=>location.reload(),1200);
+  }
+ }catch(_){}
+}
+setInterval(checkBackgroundUpdates,60000);
+setTimeout(checkBackgroundUpdates,3000);
 async function activateVoice(){
  if(typeof window.startLocalWhisper==='function'){
   await window.startLocalWhisper();
