@@ -130,7 +130,19 @@ async function transcribe(samples, rate, thisSession) {
     // O estado pode ter mudado enquanto o modelo estava transcrevendo.
     if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) return;
     const heard = String(result?.text || '').trim();
-    const clean = normalize(heard);
+    // Corrige confusões recorrentes do Whisper em comandos em português brasileiro.
+    let clean = normalize(heard);
+    const corrections = [
+      [/\\bsexta feira\\b/g, 'sexta feira'],
+      [/\\bsexto ver\\b/g, 'sexta feira'],
+      [/\\bsexta feir\\b/g, 'sexta feira'],
+      [/\\bcauculadora|cauculadoura|calculadoura\\b/g, 'calculadora'],
+      [/\\bbloco das notas\\b/g, 'bloco de notas'],
+      [/\\bgoogle maps?\\b/g, 'google maps'],
+      [/\\bwhat?s ?app\\b/g, 'whatsapp'],
+      [/\\bpor cento\\b/g, 'por cento']
+    ];
+    for (const [pattern, value] of corrections) clean = clean.replace(pattern, value);
     const hint = $('hint');
 
     if (!clean) return;
@@ -305,7 +317,7 @@ async function startLocal() {
         framePeak = Math.max(framePeak, Math.abs(value));
       }
       const rms = Math.sqrt(sumSquares / Math.max(1, channel.length));
-      const voiceNow = rms >= 0.0065 && framePeak >= 0.018;
+      const voiceNow = rms >= 0.0048 && framePeak >= 0.014;
 
       if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) {
         pending = [];
@@ -355,7 +367,7 @@ async function startLocal() {
             combined.set(part, offset);
             offset += part.length;
           }
-          const hasVoice = speechFrames >= 3 && peakRms >= 0.018 && sampleCount >= audioContext.sampleRate * 0.38;
+          const hasVoice = speechFrames >= 3 && peakRms >= 0.014 && sampleCount >= audioContext.sampleRate * 0.32;
           pending = [];
           preRoll = [];
           sampleCount = 0;
