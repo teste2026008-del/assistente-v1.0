@@ -237,6 +237,31 @@ class Handler(SimpleHTTPRequestHandler):
     else:subprocess.Popen(cmd,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o aplicativo: "+str(e)[:150]})
    return self.send_json(200,{"message":"Solicitei ao Windows que abra "+name+"."})
+  if k=="weather":
+   city=str(d.get("city","")).strip()[:120]
+   if not city:return self.send_json(400,{"error":"Diga a cidade. Por exemplo: 'como está o tempo em Goiânia?'."})
+   try:
+    geo_url="https://geocoding-api.open-meteo.com/v1/search?name="+quote_plus(city)+"&count=1&language=pt&format=json"
+    with urllib.request.urlopen(urllib.request.Request(geo_url,headers={"User-Agent":"Sexta-Feira-Local/1.0"}),timeout=12) as response: geo=json.loads(response.read().decode("utf-8"))
+    results=geo.get("results") or []
+    if not results:return self.send_json(404,{"error":"Não encontrei essa cidade. Diga o nome da cidade e do estado."})
+    place=results[0];lat=place["latitude"];lon=place["longitude"]
+    forecast_url=f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&timezone=auto"
+    with urllib.request.urlopen(urllib.request.Request(forecast_url,headers={"User-Agent":"Sexta-Feira-Local/1.0"}),timeout=12) as response: forecast=json.loads(response.read().decode("utf-8"))
+    current=forecast.get("current",{})
+    codes={0:"céu limpo",1:"predominantemente limpo",2:"parcialmente nublado",3:"nublado",45:"neblina",48:"neblina com geada",51:"garoa leve",53:"garoa moderada",55:"garoa intensa",61:"chuva fraca",63:"chuva moderada",65:"chuva forte",71:"neve fraca",73:"neve moderada",75:"neve forte",80:"pancadas de chuva fracas",81:"pancadas de chuva moderadas",82:"pancadas de chuva fortes",95:"trovoadas",96:"trovoadas com granizo leve",99:"trovoadas com granizo forte"}
+    label=place.get("name",city)
+    admin=place.get("admin1","")
+    if admin:label+=", "+admin
+    temp=current.get("temperature_2m");feels=current.get("apparent_temperature");humidity=current.get("relative_humidity_2m");wind=current.get("wind_speed_10m");rain=current.get("precipitation")
+    message=f"Tempo agora em {label}: {codes.get(current.get('weather_code'),'condição não identificada')}. "
+    if temp is not None:message+=f"Temperatura de {temp:g} °C"
+    if feels is not None:message+=f", sensação de {feels:g} °C"
+    if humidity is not None:message+=f", umidade de {humidity}%"
+    if wind is not None:message+=f" e vento de {wind:g} km/h"
+    if rain is not None:message+=f". Precipitação atual: {rain:g} mm"
+    return self.send_json(200,{"message":message+"."})
+   except Exception as e:return self.send_json(502,{"error":"Não consegui consultar o tempo agora. Verifique a conexão e tente novamente.","detail":str(e)[:180]})
   if k=="current_time":return self.send_json(200,{"message":"Agora são "+datetime.datetime.now().strftime("%H:%M")+" de "+datetime.datetime.now().strftime("%d/%m/%Y")+" (horário local do computador)."})
   if k=="system_info":return self.send_json(200,{"message":f"Computador: {platform.node()}\nSistema: {platform.platform()}\nPython: {platform.python_version()}\nPasta do agente: {ROOT}"})
   if k in ("git_status","git_log"):
