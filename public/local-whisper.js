@@ -10,6 +10,8 @@ let speechFrames = 0, silenceFrames = 0, peakRms = 0, commandCooldownUntil = 0;
 let preRoll = [], capturingSpeech = false;
 let session = 0;
 let modelPromise = null;
+let asrDevice = null;
+let inferenceQueue = Promise.resolve();
 let permissionStatus = 'unknown';
 
 const normalize = value => String(value || '')
@@ -99,13 +101,31 @@ async function transcribe(samples, rate, thisSession) {
         audio = boosted;
       }
     }
-    const result = await asr(audio, {
+    const runOptions = {
       sampling_rate: 16000,
       language: 'portuguese',
       task: 'transcribe',
       chunk_length_s: 20,
       stride_length_s: 4
-    });
+    };
+    const doInference = async () => {
+      try {
+        return await asr(audio, runOptions);
+      } catch (inferenceError) {
+        const message = String(inferenceError?.message || inferenceError || '');
+        if (!/session already started|already started/i.test(message) || asrDevice !== 'webgpu') throw inferenceError;
+        console.warn('Whisper WebGPU session conflict; switching to stable CPU/WASM.', inferenceError);
+        if ($('hint')) $('hint').textContent = 'Ajustando o reconhecimento de voz para evitar conflito de sessão…';
+        asr = null;
+        modelPromise = null;
+        asrDevice = null;
+        const cpuModel = await ensureCpuModel($('hint'));
+        return await cpuModel(audio, runOptions);
+      }
+    };
+    const inferenceJob = inferenceQueue.then(doInference, doInference);
+    inferenceQueue = inferenceJob.then(() => undefined, () => undefined);
+    const result = await inferenceJob;
     if (!active || thisSession !== session) return;
     // O estado pode ter mudado enquanto o modelo estava transcrevendo.
     if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) return;
@@ -178,6 +198,28 @@ async function transcribe(samples, rate, thisSession) {
   }
 }
 
+async function ensureCpuModel(hint) {
+  if (asr && asrDevice === 'wasm') return asr;
+  if (!modelPromise) {
+    modelPromise = (async () => {
+      if (hint) hint.textContent = 'Preparando reconhecimento estável pela CPU…';
+      const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', {
+        device: 'wasm',
+        progress_callback: progress => {
+          if (!hint) return;
+          if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
+            hint.textContent = 'Preparando reconhecimento estável: ' + Math.round(progress.progress) + '%';
+          }
+        }
+      });
+      asr = model;
+      asrDevice = 'wasm';
+      return model;
+    })().catch(error => { modelPromise = null; throw error; });
+  }
+  return modelPromise;
+}
+
 async function ensureModel(hint) {
   if (asr) return asr;
   if (!modelPromise) {
@@ -196,14 +238,13 @@ async function ensureModel(hint) {
       if (navigator.gpu) {
         try {
           const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-small', { ...options, device: 'webgpu' });
-          asr = model; return model;
+          asr = model; asrDevice = 'webgpu'; return model;
         } catch (gpuError) {
           console.warn('WebGPU indisponível para Whisper Base; usando WASM.', gpuError);
           if (hint) hint.textContent = 'GPU indisponível; preparando reconhecimento local pela CPU…';
         }
       }
-      const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', { ...options, device: 'wasm' });
-      asr = model; return model;
+      return await ensureCpuModel(hint);
     })().catch(error => { modelPromise = null; throw error; });
   }
   return modelPromise;
