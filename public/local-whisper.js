@@ -228,16 +228,16 @@ async function ensureModel(hint) {
         progress_callback: progress => {
           if (!hint) return;
           if (progress?.status === 'progress' && Number.isFinite(progress.progress)) {
-            hint.textContent = 'Preparando modelo de maior precisão: ' + Math.round(progress.progress) + '%';
+            hint.textContent = 'Preparando modelo de voz: ' + Math.round(progress.progress) + '%';
           } else if (progress?.status === 'download') {
-            hint.textContent = 'Baixando o modelo de voz de maior precisão pela primeira vez; depois será reutilizado do cache…';
+            hint.textContent = 'Baixando o modelo de voz otimizado pela primeira vez; depois será reutilizado do cache…';
           }
         }
       };
-      // Usa Whisper Small na GPU para ganhar precisão; se a GPU falhar, recua para Whisper Base na CPU para não travar máquinas mais simples.
+      // Usa Whisper Base na GPU para equilibrar velocidade e precisão; se a GPU falhar, recua para Whisper Base na CPU.
       if (navigator.gpu) {
         try {
-          const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-small', { ...options, device: 'webgpu' });
+          const model = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', { ...options, device: 'webgpu' });
           asr = model; asrDevice = 'webgpu'; return model;
         } catch (gpuError) {
           console.warn('WebGPU indisponível para Whisper Base; usando WASM.', gpuError);
