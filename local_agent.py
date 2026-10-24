@@ -106,6 +106,11 @@ class Handler(SimpleHTTPRequestHandler):
  def do_GET(self):
   p=urlparse(self.path).path
   if p=="/api/health": return self.send_json(200,{"ok":True,"service":"Sexta-Feira Local","host":HOST,"port":PORT})
+  if p=="/api/update/status":
+   try:
+    state=json.loads((MEMORY_DIR/"web-update-state.json").read_text(encoding="utf-8"))
+   except Exception: state={"commit":"","restart_required":False}
+   return self.send_json(200,state)
   if p=="/api/memory": return self.memory_get()
   if p=="/api/reminders/check": return self.reminders_check()
   if p=="/api/reminders": return self.reminders_get()
