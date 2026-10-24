@@ -128,7 +128,15 @@ async function tryLocalAction(text){
    return best;
  }
  if((m=s.match(/^(?:sexta feira[, ]*)?(?:como esta o tempo|como esta o clima|qual a previsao do tempo|previsao do tempo|clima|tempo) (?:em|para|na cidade de) (.+)$/i)))action={type:'weather',city:m[1].trim()};
- if(/^(?:sexta feira[, ]*)?(?:que horas sao|que hora e|qual e a hora|que dia e hoje|qual a data de hoje|data e hora atual)[?!. ]*$/i.test(s))action={type:'current_time'};
+ if(/^(?:sexta feira[, ]*)?(?:inicie|iniciar|abra|abrir|ligue|iniciar o|abra o)? ?(?:navegador controlavel|controle do navegador|navegador para automacao)[!. ]*$/i.test(s))action={type:'browser_start'};
+ else if(/^(?:sexta feira[, ]*)?(?:leia|ler|resuma|resumir|mostre|mostrar) (?:o conteudo d[ao] pagina|a pagina|o que tem na pagina|o conteudo do site)[!. ]*$/i.test(s))action={type:'browser_snapshot'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:navegue para|navegar para|va para|vai para|entre no site|abra o site) (.+)$/i)))action={type:'browser_navigate',url:m[1].trim()};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:clique|clicar|clica) (?:no|na|em|sobre o|sobre a) (.+)$/i)))action={type:'browser_click',target:m[1].trim()};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:preencha|preencher|preenche) (?:o campo )?(.+?) com (.+)$/i)))action={type:'browser_fill',target:m[1].trim(),value:m[2].trim()};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:digite|digitar|escreva|escrever) (.+)$/i)))action={type:'browser_type',text:m[1].trim()};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:pressione|pressionar|aperte) (enter|tab|escape|esc|space|seta para baixo|seta para cima)$/i)))action={type:'browser_press',key:m[1].trim()};
+ else if(/^(?:sexta feira[, ]*)?(?:feche|fechar|encerre|encerrar) (?:a )?sessao do navegador controlavel[!. ]*$/i.test(s))action={type:'browser_stop'};
+ else if(/^(?:sexta feira[, ]*)?(?:que horas sao|que hora e|qual e a hora|que dia e hoje|qual a data de hoje|data e hora atual)[?!. ]*$/i.test(s))action={type:'current_time'};
  else if((m=original.match(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir|inicie|inicia|iniciar|acesse|acessa|acessar|entre em|entra em|entrar em|entre no|entra no|entrar no|vá para|vai para|ir para|abre o link)\s+(https?:\/\/\S+)$/i)))action={type:'open_url',url:m[1]};
  else if(/^(?:sexta feira[, ]*)?(?:aumente|aumentar|aumenta|suba|subir) (?:o )?volume[!. ]*$/i.test(s))action={type:'media_control',command:'volume_up'};
  else if(/^(?:sexta feira[, ]*)?(?:diminua|diminuir|diminui|abaixe|abaixar|abaixa) (?:o )?volume[!. ]*$/i.test(s))action={type:'media_control',command:'volume_down'};
