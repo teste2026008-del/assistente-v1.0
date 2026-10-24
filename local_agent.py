@@ -303,7 +303,7 @@ class Handler(SimpleHTTPRequestHandler):
      usage=shutil.disk_usage(str(Path.home()))
      lines.append(f"Disco da unidade do usuário: {usage.free/1024**3:.1f} GB livres de {usage.total/1024**3:.1f} GB")
     except Exception:pass
-    return self.send_json(200,{"message":"\\n".join(lines)})
+    return self.send_json(200,{"message":"\n".join(lines)})
    except Exception as e:return self.send_json(500,{"error":"Não consegui consultar o sistema: "+str(e)[:150]})
   if k in ("git_status","git_log"):
    try:
