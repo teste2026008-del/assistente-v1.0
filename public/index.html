@@ -138,7 +138,11 @@ async function tryLocalAction(text){
  }
  else if(/^(?:sexta feira[, ]*)?(?:status do git|verifique o git|git status)$/i.test(s))action={type:'git_status'};
  else if(/^(?:sexta feira[, ]*)?(?:ultimos commits|historico do git|git log)$/i.test(s))action={type:'git_log'};
- else if(/^(?:sexta feira[, ]*)?(?:informacoes do sistema|info do computador|status do computador)$/i.test(s))action={type:'system_info'};
+ else if(/^(?:sexta feira[, ]*)?(?:informacoes do sistema|info do computador|status do computador|quanto de ram tem|uso de memoria|status do pc|desempenho do computador|como esta meu computador)$/i.test(s))action={type:'system_info'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abra|abre|abrir|inicie|iniciar)\s+(gerenciador de tarefas|task manager|calculadora|bloco de notas|notepad)$/i))){
+   const apps={'gerenciador de tarefas':'gerenciador de tarefas','task manager':'gerenciador de tarefas','calculadora':'calculadora','bloco de notas':'bloco de notas','notepad':'bloco de notas'};
+   action={type:'open_app',name:apps[m[1].toLowerCase()]};
+ }
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:liste|listar|mostre) (?:os arquivos de )?(downloads|documentos|area de trabalho|desktop)$/i)))action={type:'list_folder',name:m[1]};
 
  else if(/^(?:sexta feira[, ]*)?(?:quanto de bateria tem|qual a bateria|nivel da bateria|porcentagem da bateria|como esta a bateria|bateria do computador)[?!. ]*$/i.test(s))action={type:'battery_info'};
