@@ -174,6 +174,7 @@ async function tryLocalAction(text){
  }
  else if(/^(?:sexta feira[, ]*)?(?:quais sao meus lembretes|liste os lembretes|listar lembretes|meus lembretes|lembretes pendentes)[?!. ]*$/i.test(s))action={type:'list_reminders'};
  else if(/^(?:sexta feira[, ]*)?(?:tire uma captura de tela|capturar a tela|capture a tela|abrir captura de tela|abra a ferramenta de captura|print da tela)[?!. ]*$/i.test(s))action={type:'screenshot'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:faca uma previa de organizacao|organize|organizar|analise) (?:a pasta )?(downloads|documentos|area de trabalho|desktop)[?!. ]*$/i)))action={type:'organize_preview',name:m[1]};
  if(!action)return null;
  try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();return r.ok?(d.message||'Comando concluído.'):('Não consegui executar: '+(d.error||r.statusText))}
  catch(e){return 'Não consegui acessar o agente local: '+(e.message||e)}
