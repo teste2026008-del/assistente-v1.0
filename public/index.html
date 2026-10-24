@@ -127,6 +127,30 @@ async function tryLocalAction(text){
    // Evita disparar aplicativos por palavras soltas; exige verbo de ação antes do nome.
    return best;
  }
+ // Comandos diretos e frases compostas: priorizar ações reais antes da conversa genérica.
+ if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:(?:e|entao)\s+)?(?:abre|abra|abrir|acesse|acessa|acessar|entra em|entre em|vai para|ir para|abre o site)\s+(?:o\s+|a\s+|site\s+)?(https?:\/\/\S+|(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/\S*)?)(?:\s+(?:abre|abrir|por favor))?$/i))) {
+   let url=m[1].replace(/[.,!?;]+$/,''); if(!/^https?:\/\//i.test(url))url='https://'+url;
+   action={type:'open_url',url};
+ }
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?youtube\s+(?:e\s+)?(?:toque|toca|coloque|coloca|reproduza|reproduzir|procure|pesquise|busque)\s+(.+)$/i)))action={type:'youtube_search',query:m[1].replace(/^(?:uma?\s+)?musica\s+(?:do|da|de)\s+/i,'')};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar|mata|finaliza|finalize)\s+(?:completamente\s+)?(?:(?:o|a)\s+)?(?:(?:aplicativo|programa|janela)\s+(?:da|do|de)\s+)?(.+?)(?:\s+(?:completamente|totalmente|de vez|por completo))?$/i))){
+   let target=m[1].replace(/^(?:o|a|meu|minha)\s+/,'').trim();
+   if(/^(?:aplicativo|programa|janela|app)$/i.test(target))target=localStorage.getItem('sextaLastApp')||'';
+   const app=findApp(target);
+   if(app){localStorage.setItem('sextaLastApp',app);action={type:'close_app',name:app}}
+ }
+ else if(/^(?:sexta feira[, ]*)?(?:que horas sao|que hora sao|que horas e|que hora e|qual e a hora|me fala a hora|me diga a hora|horas agora|hora atual|qual o horario)[?!. ]*$/i.test(s))action={type:'current_time'};
+ else if(/^(?:sexta feira[, ]*)?(?:sim|sim por favor|isso|isso mesmo|pode fazer|faca isso|pode|confirmo|pode fechar)[!. ]*$/i.test(s)){
+   const previous=localStorage.getItem('sextaLastApp')||'';
+   if(previous)action={type:'close_app',name:previous};
+ }
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:meu\s+)?navegador(?:\s+(?:e\s+)?(?:abre|abra|acesse|acessa)\s+(?:o\s+)?youtube)?[!. ]*$/i)))action={type:'open_url',url:'https://www.youtube.com'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:coloca|coloque|toca|toque|reproduz|reproduza|bota|ponha)\s+(?:uma\s+)?(?:musica|som)(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'youtube_search',query:m[1]||'músicas populares brasileiras'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:youtube|youtube music)$/i)))action={type:'open_url',url:'https://www.youtube.com'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar)\s+(?:o\s+)?(?:aplicativo|programa|app|janela)$/i))){
+   const previous=localStorage.getItem('sextaLastApp')||'';
+   if(previous)action={type:'close_app',name:previous};
+ }
  if((m=s.match(/^(?:sexta feira[, ]*)?(?:como esta o tempo|como esta o clima|qual a previsao do tempo|previsao do tempo|clima|tempo) (?:em|para|na cidade de) (.+)$/i)))action={type:'weather',city:m[1].trim()};
  if(/^(?:sexta feira[, ]*)?(?:inicie|iniciar|abra|abrir|ligue|iniciar o|abra o)? ?(?:navegador controlavel|controle do navegador|navegador para automacao)[!. ]*$/i.test(s))action={type:'browser_start'};
  else if(/^(?:sexta feira[, ]*)?(?:leia|ler|resuma|resumir|mostre|mostrar) (?:o conteudo d[ao] pagina|a pagina|o que tem na pagina|o conteudo do site)[!. ]*$/i.test(s))action={type:'browser_snapshot'};
@@ -184,6 +208,7 @@ async function tryLocalAction(text){
  else if(/^(?:sexta feira[, ]*)?(?:tire uma captura de tela|capturar a tela|capture a tela|abrir captura de tela|abra a ferramenta de captura|print da tela)[?!. ]*$/i.test(s))action={type:'screenshot'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:faca uma previa de organizacao|organize|organizar|analise) (?:a pasta )?(downloads|documentos|area de trabalho|desktop)[?!. ]*$/i)))action={type:'organize_preview',name:m[1]};
  if(!action)return null;
+ if(action.type==="open_app"||action.type==="close_app")localStorage.setItem("sextaLastApp",action.name);
  try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();return r.ok?(d.message||'Comando concluído.'):('Não consegui executar: '+(d.error||r.statusText))}
  catch(e){return 'Não consegui acessar o agente local: '+(e.message||e)}
 }
