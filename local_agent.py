@@ -346,24 +346,43 @@ class Handler(SimpleHTTPRequestHandler):
   if k=="youtube_search":
    q=str(d.get("query","")).strip()[:250]
    if not q:return self.send_json(400,{"error":"Diga o nome da música ou artista."})
+   if normalize_key(q) in ("musica","uma musica","alguma musica","musicas","uma musica boa","musicas boas"):q="músicas populares brasileiras"
    url="https://www.youtube.com/results?search_query="+quote_plus(q)
-   webbrowser.open(url)
-   return self.send_json(200,{"message":"Pesquisando no YouTube: "+q})
+   try:
+    opened=webbrowser.open(url,new=2)
+    if not opened:return self.send_json(502,{"error":"Não consegui confirmar a abertura do YouTube. Verifique se há um navegador padrão configurado."})
+    return self.send_json(200,{"message":"Abri o YouTube e pesquisei: "+q+". Escolha um resultado para iniciar a reprodução."})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o YouTube: "+str(e)[:150]})
   if k=="screenshot":
    if os.name!="nt":return self.send_json(400,{"error":"Captura de tela disponível nesta versão para Windows."})
    try:
     subprocess.Popen(["explorer.exe","ms-screenclip:"])
     return self.send_json(200,{"message":"Abri a ferramenta de captura. Selecione a área da tela que deseja capturar."})
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir a captura: "+str(e)[:120]})
-  if k=="open_browser":webbrowser.open("https://www.google.com");return self.send_json(200,{"message":"Abri o navegador na página inicial do Google."})
+  if k=="open_browser":
+   try:
+    opened=webbrowser.open("https://www.google.com",new=2)
+    if not opened:return self.send_json(502,{"error":"O Windows não confirmou a abertura do navegador padrão."})
+    return self.send_json(200,{"message":"Abri o navegador na página inicial do Google."})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o navegador: "+str(e)[:150]})
   if k=="open_url":
-   url=str(d.get("url","")).strip();u=urlparse(url)
-   if u.scheme not in ("http","https") or not u.netloc:return self.send_json(400,{"error":"Informe um link HTTP/HTTPS válido."})
-   webbrowser.open(url);return self.send_json(200,{"message":"Solicitei ao Windows que abra: "+url})
+   url=str(d.get("url","")).strip()
+   if url and not urlparse(url).scheme:url="https://"+url.lstrip("/")
+   u=urlparse(url)
+   if u.scheme not in ("http","https") or not u.netloc:return self.send_json(400,{"error":"Informe um endereço de site válido, como youtube.com."})
+   try:
+    opened=webbrowser.open(url,new=2)
+    if not opened:return self.send_json(502,{"error":"O Windows não confirmou a abertura do navegador para: "+url})
+    return self.send_json(200,{"message":"Abri o navegador em "+url})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o site: "+str(e)[:150]})
   if k=="web_search":
    q=str(d.get("query","")).strip()[:300]
    if not q:return self.send_json(400,{"error":"Diga o que devo pesquisar."})
-   webbrowser.open("https://www.google.com/search?q="+quote_plus(q));return self.send_json(200,{"message":"Abri uma pesquisa no navegador por: "+q})
+   try:
+    url="https://www.google.com/search?q="+quote_plus(q);opened=webbrowser.open(url,new=2)
+    if not opened:return self.send_json(502,{"error":"O Windows não confirmou a abertura da pesquisa."})
+    return self.send_json(200,{"message":"Abri uma pesquisa no navegador por: "+q})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui abrir a pesquisa: "+str(e)[:150]})
   if k=="open_folder":
    p=FOLDERS.get(normalize_key(d.get("name", "")))
    if not p:return self.send_json(400,{"error":"Pasta não permitida."})
@@ -371,6 +390,27 @@ class Handler(SimpleHTTPRequestHandler):
    try:os.startfile(str(p))
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir a pasta: "+str(e)[:150]})
    return self.send_json(200,{"message":"Abri a pasta "+str(p)})
+  if k=="close_app":
+   name=normalize_key(d.get("name",""))
+   process_map={
+    "calculadora":["CalculatorApp","calc"],"bloco de notas":["notepad"],"paint":["mspaint"],
+    "explorador de arquivos":["explorer"],"gerenciador de tarefas":["Taskmgr"],
+    "chrome":["chrome"],"edge":["msedge"],"firefox":["firefox"],"opera":["opera"],"opera gx":["opera"],
+    "whatsapp":["WhatsApp"],"spotify":["Spotify"],"discord":["Discord"],"steam":["steam"],
+    "vscode":["Code"],"word":["WINWORD"],"excel":["EXCEL"],"powerpoint":["POWERPNT"],
+    "terminal":["WindowsTerminal"],"prompt de comando":["cmd"],"powershell":["powershell"]
+   }
+   targets=process_map.get(name)
+   if not targets:return self.send_json(400,{"error":"Não posso encerrar esse aplicativo automaticamente."})
+   if os.name!="nt":return self.send_json(400,{"error":"Fechar aplicativos por nome está disponível nesta versão para Windows."})
+   closed=[]
+   for proc in targets:
+    try:
+     result=subprocess.run(["taskkill.exe","/F","/IM",proc+".exe"],capture_output=True,text=True,timeout=8,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+     if result.returncode==0:closed.append(proc)
+    except Exception:pass
+   if not closed:return self.send_json(404,{"error":"Não encontrei "+name+" aberto, ou o Windows não permitiu fechá-lo."})
+   return self.send_json(200,{"message":"Fechei "+name+"."})
   if k=="open_app":
    name=normalize_key(d.get("name", ""));cmd=APPS.get(name)
    if not cmd:return self.send_json(400,{"error":"Aplicativo não permitido. Posso abrir apenas programas da lista segura."})
