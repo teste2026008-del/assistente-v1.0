@@ -147,6 +147,7 @@ async function tryLocalAction(text){
    const previous=localStorage.getItem('sextaLastApp')||'';
    if(previous)action={type:'close_app',name:previous};
  }
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:meu\s+)?navegador\s+(?:e\s+)?(?:abre\s+(?:o\s+)?youtube\s+e\s+)?(?:toca|toque|coloca|coloque|bota|ponha|reproduz|reproduza)\s+(?:uma\s+)?musica(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'youtube_search',query:m[1]||'músicas populares brasileiras'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:meu\s+)?navegador(?:\s+(?:e\s+)?(?:abre|abra|acesse|acessa)\s+(?:o\s+)?youtube)?[!. ]*$/i)))action=/youtube/.test(s)?{type:'open_url',url:'https://www.youtube.com'}:{type:'open_browser'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:coloca|coloque|toca|toque|reproduz|reproduza|bota|ponha)\s+(?:uma\s+)?(?:musica|som)(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'youtube_search',query:m[1]||'músicas populares brasileiras'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:youtube|youtube music)$/i)))action={type:'open_url',url:'https://www.youtube.com'};
