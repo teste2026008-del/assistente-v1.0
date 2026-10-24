@@ -146,6 +146,57 @@ def check_and_apply_updates():
         # Atualização não pode impedir a abertura do aplicativo sem internet/GitHub.
         logging.warning("Atualização automática indisponível; abrindo versão local: %s", exc)
 
+def check_web_updates():
+    """Atualiza apenas arquivos web em segundo plano; nunca sobrescreve Python em execução."""
+    try:
+        info = json.loads(_download(GITHUB_API))
+        latest_sha = str(info.get("sha", "")).strip()
+        if len(latest_sha) != 40:
+            raise RuntimeError("SHA inválido recebido do GitHub")
+        state_path = LOG_DIR / "web-update-state.json"
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except Exception:
+            state = {}
+        if state.get("commit") == latest_sha:
+            return
+        files = info.get("files") or []
+        runtime_changed = any(str(item.get("filename", "")).endswith(".py") for item in files)
+        updated = []
+        for relative in ("public/index.html", "public/local-whisper.js"):
+            data = _download(f"{RAW_BASE}/{latest_sha}/{relative}?v={latest_sha}")
+            if not _file_is_valid(relative, data):
+                raise RuntimeError(f"Arquivo web inválido: {relative}")
+            target = ROOT / relative
+            if target.exists() and target.read_bytes() == data:
+                continue
+            backup_dir = BACKUP_ROOT / ("web-" + time.strftime("%Y%m%d-%H%M%S"))
+            if target.exists():
+                backup = backup_dir / relative
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(target, backup)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temp = target.with_name(target.name + ".web-update-tmp")
+            temp.write_bytes(data)
+            os.replace(temp, target)
+            updated.append(relative)
+        state_path.write_text(json.dumps({
+            "commit": latest_sha,
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "updated_files": updated,
+            "restart_required": runtime_changed,
+        }, indent=2), encoding="utf-8")
+        logging.info("Verificação em segundo plano concluída; arquivos web atualizados: %s; reinício Python necessário: %s",
+                     updated, runtime_changed)
+    except Exception:
+        logging.exception("Falha ao verificar/aplicar atualização web em segundo plano")
+
+def update_loop():
+    """Verifica atualizações a cada 5 minutos sem bloquear a interface."""
+    while True:
+        time.sleep(300)
+        check_web_updates()
+
 def port_open():
     with socket.socket() as sock:
         sock.settimeout(0.25)
@@ -155,6 +206,7 @@ def main():
     # Executa antes de importar local_agent e antes de abrir a interface para carregar
     # os arquivos novos nesta sessão. Falhas de internet não bloqueiam a assistente.
     check_and_apply_updates()
+    Thread(target=update_loop, daemon=True, name="SextaFeiraUpdater").start()
 
     # Importar só depois do updater permite atualizar local_agent.py com segurança.
     from local_agent import HOST, PORT, Handler
