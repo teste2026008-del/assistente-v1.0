@@ -130,6 +130,14 @@ async function tryLocalAction(text){
  // Comandos diretos e frases compostas: priorizar ações reais antes da conversa genérica.
  // Música: interpretar pedido completo e usar contexto para artista dito em seguida.
  const musicGeneric='músicas populares brasileiras';
+ if(/\byoutube\b/i.test(s) && /\b(?:musica|musicas|musculo|video|videos|toca|toque|coloca|coloque|bota|reproduz|reproduza|ouvir|escutar)\b/i.test(s)){
+   let q=original.replace(/.*?\byoutube(?:\.com)?\b/i,' ');
+   q=q.replace(/\b(?:nao|não|me|por favor|mano|e|ai|aí|abre|abrir|abra|coloca|coloque|bota|ponha|toca|toque|reproduz|reproduza|procura|procure|pesquisa|pesquise|busca|busque|quero ouvir|quero escutar|qualquer|uma|um|musica|músicas|música|musculo|músculo|video|vídeo|videos|vídeos|na|no|da|do|de|com|para|pra|a|o|em|dono da toca|na nasa a dor)\b/gi,' ');
+   q=q.replace(/[.,!?;:]+/g,' ').replace(/\s+/g,' ').trim();
+   if(!q || /^(?:musica|musicas|video|videos)$/i.test(norm(q)))q=musicGeneric;
+   action={type:'youtube_search',query:q};
+   localStorage.setItem('sextaPendingMusic','1');
+ }
  if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:(?:abre|abra|abrir|vai|vá|acesse|acessa|acessar)\s+)?(?:o\s+)?(?:youtube|youtube\.com)(?:\s+e)?\s+(?:(?:bota|coloca|coloque|toca|toque|reproduz|reproduza|abre|abrir|procura|procure|pesquisa|pesquise|busca|busque)\s+)?(.+)$/i))){
    let q=m[1].trim();
    q=q.replace(/^(?:qualquer musica|uma musica qualquer|alguma musica|qualquer video|um video qualquer)$/i,musicGeneric);
