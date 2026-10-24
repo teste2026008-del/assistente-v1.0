@@ -218,7 +218,7 @@ class Handler(SimpleHTTPRequestHandler):
   clean=[]
   for x in items[-100:]:
    if isinstance(x,dict) and str(x.get("text","")).strip() and str(x.get("due","")).strip():
-    clean.append({"id":str(x.get("id",""))[:80],"text":str(x.get("text","")).strip()[:300],"due":str(x.get("due",""))[:40],"done":bool(x.get("done",False)})
+    clean.append({"id":str(x.get("id",""))[:80],"text":str(x.get("text","")).strip()[:300],"due":str(x.get("due",""))[:40],"done":bool(x.get("done",False))})
   try: REMINDERS_FILE.write_text(json.dumps(clean,ensure_ascii=False,indent=2),encoding="utf-8")
   except OSError as e:return self.send_json(500,{"error":"Não consegui salvar os lembretes: "+str(e)[:120]})
   return self.send_json(200,{"ok":True,"count":len(clean)})
