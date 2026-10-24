@@ -283,7 +283,28 @@ class Handler(SimpleHTTPRequestHandler):
     return self.send_json(200,{"message":"Vou bloquear a tela do computador agora."})
    except Exception as e:return self.send_json(500,{"error":"Não consegui bloquear a tela: "+str(e)[:150]})
   if k=="current_time":return self.send_json(200,{"message":"Agora são "+datetime.datetime.now().strftime("%H:%M")+" de "+datetime.datetime.now().strftime("%d/%m/%Y")+" (horário local do computador)."})
-  if k=="system_info":return self.send_json(200,{"message":f"Computador: {platform.node()}\nSistema: {platform.platform()}\nPython: {platform.python_version()}\nPasta do agente: {ROOT}"})
+  if k=="system_info":
+   try:
+    import shutil
+    lines=[f"Computador: {platform.node()}",f"Sistema: {platform.platform()}",f"Processadores lógicos: {os.cpu_count() or 'não informado'}",f"Python: {platform.python_version()}"]
+    try:
+     if os.name=="nt":
+      import ctypes
+      class MemoryStatus(ctypes.Structure):
+       _fields_=[("dwLength",ctypes.c_ulong),("dwMemoryLoad",ctypes.c_ulong),("ullTotalPhys",ctypes.c_ulonglong),("ullAvailPhys",ctypes.c_ulonglong),("ullTotalPageFile",ctypes.c_ulonglong),("ullAvailPageFile",ctypes.c_ulonglong),("ullTotalVirtual",ctypes.c_ulonglong),("ullAvailVirtual",ctypes.c_ulonglong),("ullAvailExtendedVirtual",ctypes.c_ulonglong)]
+      mem=MemoryStatus();mem.dwLength=ctypes.sizeof(mem)
+      if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem)):
+       total=mem.ullTotalPhys/1024**3;avail=mem.ullAvailPhys/1024**3
+       lines.append(f"Memória RAM: {total:.1f} GB total, {avail:.1f} GB disponível ({mem.dwMemoryLoad}% em uso)")
+     else:
+      lines.append("Memória RAM: consulta detalhada disponível no Windows.")
+    except Exception:pass
+    try:
+     usage=shutil.disk_usage(str(Path.home()))
+     lines.append(f"Disco da unidade do usuário: {usage.free/1024**3:.1f} GB livres de {usage.total/1024**3:.1f} GB")
+    except Exception:pass
+    return self.send_json(200,{"message":"\\n".join(lines)})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui consultar o sistema: "+str(e)[:150]})
   if k in ("git_status","git_log"):
    try:
     args=["git","-C",str(ROOT),"status","--short","--branch"] if k=="git_status" else ["git","-C",str(ROOT),"log","-5","--oneline"]
