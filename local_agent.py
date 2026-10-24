@@ -12,6 +12,7 @@ WORKER="https://assistente-v1-0.teste2026008.workers.dev"
 NOTES=ROOT/"notas"
 MEMORY_DIR=Path.home()/"AppData"/"Local"/"Sexta-Feira"
 MEMORY_FILE=MEMORY_DIR/"memoria.json"
+REMINDERS_FILE=MEMORY_DIR/"lembretes.json"
 MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
 TTS_DIR=MEMORY_DIR/"models"/"kokoro"
@@ -101,6 +102,7 @@ class Handler(SimpleHTTPRequestHandler):
   p=urlparse(self.path).path
   if p=="/api/health": return self.send_json(200,{"ok":True,"service":"Sexta-Feira Local","host":HOST,"port":PORT})
   if p=="/api/memory": return self.memory_get()
+  if p=="/api/reminders": return self.reminders_get()
   if p.startswith("/api/"): return self.proxy(p,b"","GET")
   return super().do_GET()
  def do_POST(self):
@@ -110,6 +112,10 @@ class Handler(SimpleHTTPRequestHandler):
    except Exception:return self.send_json(400,{"error":"JSON inválido."})
    return self.action(data)
   if p=="/api/tts": return self.local_tts(body)
+  if p=="/api/reminders":
+   try:data=json.loads(body or b"{}")
+   except Exception:return self.send_json(400,{"error":"JSON inválido."})
+   return self.reminders_save(data)
   if p=="/api/memory":
    try:data=json.loads(body or b"{}")
    except Exception:return self.send_json(400,{"error":"JSON inválido."})
@@ -180,6 +186,23 @@ class Handler(SimpleHTTPRequestHandler):
   except urllib.error.HTTPError as e:
    data=e.read();self.send_response(e.code);self.send_header("Content-Type",e.headers.get("Content-Type","application/json"));self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
   except Exception as e:self.send_json(502,{"error":"Falha ao conectar à IA/voz online.","detail":str(e)[:220]})
+ def reminders_read(self):
+  try:
+   data=json.loads(REMINDERS_FILE.read_text(encoding="utf-8"))
+   return data if isinstance(data,list) else []
+  except (OSError,ValueError,TypeError): return []
+ def reminders_get(self):
+  return self.send_json(200,{"reminders":self.reminders_read()})
+ def reminders_save(self,d):
+  items=d.get("reminders",[])
+  if not isinstance(items,list): return self.send_json(400,{"error":"Lista de lembretes inválida."})
+  clean=[]
+  for x in items[-100:]:
+   if isinstance(x,dict) and str(x.get("text","")).strip() and str(x.get("due","")).strip():
+    clean.append({"id":str(x.get("id",""))[:80],"text":str(x.get("text","")).strip()[:300],"due":str(x.get("due",""))[:40],"done":bool(x.get("done",False)})
+  try: REMINDERS_FILE.write_text(json.dumps(clean,ensure_ascii=False,indent=2),encoding="utf-8")
+  except OSError as e:return self.send_json(500,{"error":"Não consegui salvar os lembretes: "+str(e)[:120]})
+  return self.send_json(200,{"ok":True,"count":len(clean)})
  def memory_read(self):
   try:
    data=json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
@@ -204,6 +227,18 @@ class Handler(SimpleHTTPRequestHandler):
   return self.send_json(200,{"ok":True,"facts":len(facts),"history":len(history)})
  def action(self,d):
   k=d.get("type")
+  if k=="youtube_search":
+   q=str(d.get("query","")).strip()[:250]
+   if not q:return self.send_json(400,{"error":"Diga o nome da música ou artista."})
+   url="https://www.youtube.com/results?search_query="+quote_plus(q)
+   webbrowser.open(url)
+   return self.send_json(200,{"message":"Pesquisando no YouTube: "+q})
+  if k=="screenshot":
+   if os.name!="nt":return self.send_json(400,{"error":"Captura de tela disponível nesta versão para Windows."})
+   try:
+    subprocess.Popen(["explorer.exe","ms-screenclip:"])
+    return self.send_json(200,{"message":"Abri a ferramenta de captura. Selecione a área da tela que deseja capturar."})
+   except Exception as e:return self.send_json(500,{"error":"Não consegui abrir a captura: "+str(e)[:120]})
   if k=="open_browser":webbrowser.open("https://www.google.com");return self.send_json(200,{"message":"Abri o navegador na página inicial do Google."})
   if k=="open_url":
    url=str(d.get("url","")).strip();u=urlparse(url)
