@@ -125,6 +125,7 @@ async function tryLocalAction(text){
    // Evita disparar aplicativos por palavras soltas; exige verbo de ação antes do nome.
    return best;
  }
+ if((m=s.match(/^(?:sexta feira[, ]*)?(?:como esta o tempo|como esta o clima|qual a previsao do tempo|previsao do tempo|clima|tempo) (?:em|para|na cidade de) (.+)$/i)))action={type:'weather',city:m[1].trim()};
  if(/^(?:sexta feira[, ]*)?(?:que horas sao|que hora e|qual e a hora|que dia e hoje|qual a data de hoje|data e hora atual)[?!. ]*$/i.test(s))action={type:'current_time'};
  else if((m=original.match(/^(?:sexta-feira[, ]*)?(?:abra|abre|abrir|acesse|acessar|entre em|ir para)\s+(https?:\/\/\S+)$/i)))action={type:'open_url',url:m[1]};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:pesquise|pesquisar|procure|buscar|busque|pesquisa na internet)\s+(.+)$/i)))action={type:'web_search',query:m[1]};
