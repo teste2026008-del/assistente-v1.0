@@ -7,7 +7,8 @@ Assistente de programação em português brasileiro, com interface de conversa,
 - Interface responsiva em `public/index.html`.
 - Captura de voz pelo reconhecimento de fala do navegador (quando suportado).
 - Leitura das respostas com a síntese de voz do navegador.
-- Respostas de conversa geradas pelo Workers AI no próprio painel, sem abrir o navegador.
+- Respostas do Workers AI aparecem no painel enquanto são geradas. Perguntas curtas usam o modelo rápido; pedidos técnicos mais complexos podem usar Llama 3.3 70B, que é mais caro.
+- A captura de voz usa Whisper Base com aceleração WebGPU quando disponível, fallback para WASM, detecção de fala com pausas menores e correções comuns de transcrição.
 - Endpoint `/api/create-site` em `src/index.js`: gera uma página HTML única; o agente local salva em `Documentos\\Sexta-Feira Sites` e mostra uma prévia isolada no app. O endpoint limita cada endereço IP a quatro criações por minuto.
 - Player dentro do app para músicas encontradas nas pastas Música e Downloads, além de links diretos de vídeo do YouTube. A busca de artista usa nomes de arquivos locais; buscar no catálogo do YouTube exige uma integração de catálogo/API.
 - O agente local pode abrir uma janela própria de navegador com Playwright, navegar, ler conteúdo, clicar em links, preencher campos e baixar arquivos oferecidos por uma página.
