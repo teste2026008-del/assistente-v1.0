@@ -24,6 +24,19 @@ function state(value) {
   else if ($('status')) $('status').textContent = value;
 }
 
+const micSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4m-4 0h8"></path></svg>';
+function setVoicePreference(enabled) {
+  try { localStorage.setItem('sextaVoiceAutoStart', enabled ? '1' : '0'); } catch {}
+}
+function updateMicButton(enabled) {
+  const button = $('mic');
+  if (!button) return;
+  button.classList.toggle('active', enabled);
+  button.setAttribute('aria-pressed', String(enabled));
+  button.setAttribute('aria-label', enabled ? 'Desativar escuta por voz' : 'Ativar escuta por voz');
+  button.innerHTML = enabled ? '●' : micSvg;
+}
+
 function stopLocal() {
   active = false;
   session++;
@@ -44,8 +57,7 @@ function stopLocal() {
   transcribing = false;
   window.localWakeAwaiting = false;
   window.localWhisperRunning = false;
-  $('mic')?.classList.remove('active');
-  if ($('mic')) $('mic').innerHTML = '🎙 <span class="mic-label">ATIVAR VOZ</span>';
+  updateMicButton(false);
 }
 
 function resample(input, fromRate, toRate) {
@@ -188,6 +200,7 @@ async function transcribe(samples, rate, thisSession) {
         window.localWakeAwaiting = true;
         if (hint) hint.textContent = 'CHAMADA RECONHECIDA • FALE AGORA O COMANDO';
         state('OUVINDO COMANDO');
+        window.acknowledgeWakePhrase?.();
         return;
       }
       window.localWakeAwaiting = false;
@@ -280,6 +293,7 @@ async function startLocal() {
   if (active || loading) return;
   loading = true;
   active = true;
+  updateMicButton(true);
   window.localWhisperRunning = true;
   window.localWakeAwaiting = false;
   const thisSession = ++session;
@@ -391,12 +405,12 @@ async function startLocal() {
     state(asr ? 'MODELO DE VOZ PRONTO' : 'PREPARANDO MODELO DE VOZ');
     await ensureModel(hint);
     if (!active || thisSession !== session) return;
-    $('mic')?.classList.add('active');
-    if ($('mic')) $('mic').innerHTML = '● <span class="mic-label">VOZ LOCAL ATIVA</span>';
+    updateMicButton(true);
     if (hint) hint.textContent = 'VOZ LOCAL ATIVA • FALE NORMALMENTE; NÃO PRECISA DIZER “SEXTA-FEIRA”';
     state('OUVINDO COMANDOS');
   } catch (error) {
     stopLocal();
+    if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') setVoicePreference(false);
     const hint = $('hint');
     if (hint) hint.textContent = 'Não consegui iniciar a voz local: ' + (error?.message || error?.name || String(error));
     state('ERRO NO RECONHECIMENTO');
@@ -406,6 +420,7 @@ async function startLocal() {
 }
 
 function stopByUser() {
+  setVoicePreference(false);
   stopLocal();
   if ($('hint')) $('hint').textContent = 'ESCUTA DESATIVADA';
   state('SISTEMA PRONTO');
@@ -419,7 +434,7 @@ $('mic')?.addEventListener('click', event => {
   event.preventDefault();
   event.stopImmediatePropagation();
   if (active) stopByUser();
-  else startLocal();
+  else { setVoicePreference(true); startLocal(); }
 }, true);
 
 $('stop')?.addEventListener('click', event => {
@@ -427,6 +442,7 @@ $('stop')?.addEventListener('click', event => {
     event.preventDefault();
     event.stopImmediatePropagation();
     stopByUser();
+    setVoicePreference(false);
     if ($('hint')) $('hint').textContent = 'ESCUTA PARADA';
   }
 }, true);
@@ -436,7 +452,15 @@ $('stop')?.addEventListener('click', event => {
 window.addEventListener('DOMContentLoaded', () => {
   const hint = $('hint');
   inspectMicPermission().then(permission => {
-    if (permission === 'denied' && hint) hint.textContent = 'MICROFONE BLOQUEADO • confira as permissões do aplicativo.';
+    let shouldAutoStart = false;
+    try { shouldAutoStart = localStorage.getItem('sextaVoiceAutoStart') === '1'; } catch {}
+    if (permission === 'denied') {
+      if (hint) hint.textContent = 'MICROFONE BLOQUEADO • confira as permissões do aplicativo.';
+      if (shouldAutoStart) setVoicePreference(false);
+      return;
+    }
+    if (shouldAutoStart && permission === 'granted') setTimeout(() => startLocal(), 350);
+    else if (shouldAutoStart && hint) hint.textContent = 'TOQUE NO ÍCONE DO MICROFONE PARA REATIVAR A ESCUTA.';
   });
   ensureModel(null).then(() => {
     if (!active && hint) hint.textContent = permissionStatus === 'denied'
