@@ -48,20 +48,25 @@ export default {
    if (url.pathname === "/api/chat") {
     if (!env.AI) return Response.json({error:"A inteligência artificial não está conectada ao Worker. O binding AI precisa estar habilitado."},{status:503,headers});
     try {
-     const body = await request.json();
-     const message = typeof body.message === "string" ? body.message.trim() : "";
-     if (!message) return Response.json({error:"Digite ou fale uma mensagem."},{status:400,headers});
-     if (message.length > 8000) return Response.json({error:"A mensagem passou do limite de 8.000 caracteres."},{status:413,headers});
-     const result = await env.AI.run("@cf/meta/llama-3.1-8b-fast-v2",{messages:[
-      {role:"system",content:"Você é Sexta-Feira, assistente pessoal inteligente que fala português brasileiro natural, com personalidade feminina, descontraída e objetiva. Entenda a intenção, não apenas palavras exatas: trate como equivalentes, conforme o contexto, comandos como abrir/abre/abra/acessar/acesse/entrar em/ir para/iniciar/inicia/execute/executar/rodar/roda/lançar, e também finalize/termine/encerre/conclua quando o usuário estiver falando de uma tarefa. Corrija mentalmente pequenos erros de transcrição de voz usando o contexto, sem alterar o sentido. Antes de responder, identifique o objetivo, o alvo e a ação desejada; use o histórico recente da conversa fornecido na mensagem para manter continuidade e não perguntar de novo o que já foi informado. Diferencie pedido de informação, conversa, pesquisa na web e comando para controlar o computador. IMPORTANTE: você não executa ações locais só por responder; só afirme que abriu, enviou, alterou, salvou ou concluiu algo quando uma ferramenta/resultado confirmar isso. Se a ação não estiver disponível, diga claramente que não pode executá-la por enquanto e ofereça o próximo passo prático. Se houver dois alvos plausíveis, faça uma pergunta curta; se o pedido estiver claro, execute ou responda sem perguntas desnecessárias. Para apagar arquivos, encerrar processos importantes, enviar mensagens, fazer compras ou outras ações de consequência, solicite confirmação explícita antes de executar. Nunca peça senhas, tokens ou chaves secretas. Seja direta, econômica e útil; humor leve ocasional é bem-vindo, sem desviar do assunto. Para apenas 'bom dia/boa tarde/boa noite, Sexta-Feira', responda com uma saudação curta."},
+     const body=await request.json();
+     const message=typeof body.message==="string"?body.message.trim():"";
+     const latest=typeof body.latest==="string"&&body.latest.trim()?body.latest.trim():message;
+     if(!message)return Response.json({error:"Digite ou fale uma mensagem."},{status:400,headers});
+     if(message.length>8000)return Response.json({error:"A mensagem passou do limite de 8.000 caracteres."},{status:413,headers});
+     const intent=latest.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+     const needsReasoning=latest.length>240||/\b(codigo|programar|depurar|debug|bug|erro|analisar|analise|comparar|passo a passo|planejar|matematica|resolver|funcao|arquitetura|algoritmo|otimizar)\b/.test(intent);
+     const model=needsReasoning?"@cf/meta/llama-3.3-70b-instruct-fp8-fast":"@cf/meta/llama-3.1-8b-fast-v2";
+     const messages=[
+      {role:"system",content:"Você é Sexta-Feira, assistente pessoal inteligente que fala português brasileiro natural, com personalidade feminina, descontraída e objetiva. Entenda a intenção, não apenas palavras exatas; corrija mentalmente erros de transcrição usando o contexto. Use o histórico recente para manter continuidade e não repita perguntas já respondidas. Diferencie conversa, informação, pesquisa e controle do computador. Nunca diga que executou uma ação local sem confirmação de ferramenta. Se a ação não estiver disponível, diga isso e ofereça o próximo passo. Pergunte só quando faltar uma informação importante. Para apagar arquivos, enviar mensagens, fazer compras ou outras ações de consequência, peça confirmação. Nunca peça senhas, tokens ou chaves secretas. Responda primeiro com a informação útil, em linguagem direta; em perguntas simples, use uma ou duas frases. Em tarefas técnicas complexas, explique os passos necessários sem inventar resultados. Para apenas uma saudação, responda brevemente."},
       {role:"user",content:message}
-     ],max_tokens:700});
-     const reply = result?.response ?? result?.result?.response ?? result?.output_text ?? result?.choices?.[0]?.message?.content;
-     if (typeof reply !== "string" || !reply.trim()) return Response.json({error:"A IA foi chamada, mas não retornou texto. Confira o modelo e a cota de Workers AI."},{status:502,headers});
+     ];
+     const options={messages,max_tokens:needsReasoning?900:500,temperature:0.3,stream:body.stream===true};
+     const result=await env.AI.run(model,options);
+     if(body.stream===true)return new Response(result,{headers:{...headers,"Content-Type":"text/event-stream; charset=utf-8","Cache-Control":"no-cache, no-transform","X-Accel-Buffering":"no"}});
+     const reply=result?.response??result?.result?.response??result?.output_text??result?.choices?.[0]?.message?.content;
+     if(typeof reply!=="string"||!reply.trim())return Response.json({error:"A IA foi chamada, mas não retornou texto. Confira o modelo e a cota de Workers AI."},{status:502,headers});
      return Response.json({reply:reply.trim()},{headers});
-    } catch (err) {
-     return Response.json({error:"Falha ao gerar resposta na IA. Verifique o acesso ao Workers AI, o modelo configurado e a cota disponível.",detail:String(err?.message||err).slice(0,300)},{status:502,headers});
-    }
+    }catch(err){return Response.json({error:"Falha ao gerar resposta na IA. Verifique o acesso ao Workers AI, o modelo configurado e a cota disponível.",detail:String(err?.message||err).slice(0,300)},{status:502,headers});}
    }
    return Response.json({error:"Endpoint não encontrado."},{status:404,headers});
   }
