@@ -345,7 +345,7 @@ class Handler(SimpleHTTPRequestHandler):
     if path=="/api/chat" and "text/event-stream" in content_type:
      self.send_response(res.status);self.send_header("Content-Type",content_type);self.send_header("Cache-Control","no-cache, no-transform");self.send_header("Connection","close");self.end_headers();self.close_connection=True
      while True:
-      chunk=res.read(2048)
+      chunk=res.readline()
       if not chunk:break
       self.wfile.write(chunk);self.wfile.flush()
      return
