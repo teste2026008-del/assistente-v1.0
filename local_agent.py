@@ -340,10 +340,19 @@ class Handler(SimpleHTTPRequestHandler):
  def proxy(self,path,body,method):
   try:
    req=urllib.request.Request(WORKER+path,data=body if method=="POST" else None,method=method,headers={"Content-Type":"application/json","User-Agent":"Sexta-Feira-Local/1.0"})
-   with urllib.request.urlopen(req,timeout=45) as res:
-    data=res.read();self.send_response(res.status);self.send_header("Content-Type",res.headers.get("Content-Type","application/json"));self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
+   with urllib.request.urlopen(req,timeout=60) as res:
+    content_type=res.headers.get("Content-Type","application/json")
+    if path=="/api/chat" and "text/event-stream" in content_type:
+     self.send_response(res.status);self.send_header("Content-Type",content_type);self.send_header("Cache-Control","no-cache, no-transform");self.send_header("Connection","close");self.end_headers();self.close_connection=True
+     while True:
+      chunk=res.read(2048)
+      if not chunk:break
+      self.wfile.write(chunk);self.wfile.flush()
+     return
+    data=res.read();self.send_response(res.status);self.send_header("Content-Type",content_type);self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
   except urllib.error.HTTPError as e:
    data=e.read();self.send_response(e.code);self.send_header("Content-Type",e.headers.get("Content-Type","application/json"));self.send_header("Content-Length",str(len(data)));self.end_headers();self.wfile.write(data)
+  except (BrokenPipeError,ConnectionResetError):return
   except Exception as e:self.send_json(502,{"error":"Falha ao conectar à IA/voz online.","detail":str(e)[:220]})
  def reminders_read(self):
   try:
