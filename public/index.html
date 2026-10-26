@@ -191,6 +191,13 @@ async function tryLocalAction(text){
  }
  if(!action){
  if((m=s.match(/^(?:sexta feira[, ]*)?(?:como esta o tempo|como esta o clima|qual a previsao do tempo|previsao do tempo|clima|tempo) (?:em|para|na cidade de) (.+)$/i)))action={type:'weather',city:m[1].trim()};
+ else if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:baixe|baixar|baixa|salve|salvar|faca download de|fazer download de)\s+(?:(?:o\s+)?(?:arquivo|link)\s+)?(https?:\/\/\S+?)(?:\s+(?:para|em|na pasta|na)\s+(downloads|documentos|área de trabalho|area de trabalho|desktop|imagens|fotos|músicas|musicas|música|musica|vídeos|videos|vídeo|video))?[.! ]*$/i))){
+   action={type:'download_file',url:m[1].replace(/[.,!?;]+$/,''),folder:m[2]||'downloads'};
+ }
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:baixe|baixar|baixa|salve|salvar)\s+(.+?)\s+(?:da pagina|dessa pagina|do site|desse site)(?:\s+(?:em|para|na pasta)\s+(downloads|documentos|area de trabalho|desktop|imagens|fotos|musicas|musica|videos|video))?[.! ]*$/i))){
+   action={type:'browser_download',target:m[1].replace(/^(?:o arquivo|arquivo|o link|link)\s+/i,''),folder:m[2]||'downloads'};
+ }
+
  if(/^(?:sexta feira[, ]*)?(?:inicie|iniciar|abra|abrir|ligue|iniciar o|abra o)? ?(?:navegador controlavel|controle do navegador|navegador para automacao)[!. ]*$/i.test(s))action={type:'browser_start'};
  else if(/^(?:sexta feira[, ]*)?(?:leia|ler|resuma|resumir|mostre|mostrar) (?:o conteudo d[ao] pagina|a pagina|o que tem na pagina|o conteudo do site)[!. ]*$/i.test(s))action={type:'browser_snapshot'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:navegue para|navegar para|va para|vai para|entre no site|abra o site) (.+)$/i)))action={type:'browser_navigate',url:m[1].trim()};
