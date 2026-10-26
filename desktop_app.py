@@ -8,6 +8,8 @@ import logging
 import os
 import shutil
 import socket
+import subprocess
+import sys
 import tempfile
 import time
 from urllib.request import Request, urlopen
@@ -162,6 +164,35 @@ def check_web_updates():
             return
         files = info.get("files") or []
         runtime_changed = any(str(item.get("filename", "")).endswith(".py") for item in files)
+        if runtime_changed:
+            try:
+                previous_core = json.loads(UPDATE_STATE.read_text(encoding="utf-8"))
+            except Exception:
+                previous_core = {}
+            previous_core_commit = str(previous_core.get("commit", ""))
+            check_and_apply_updates()
+            try:
+                installed_core = json.loads(UPDATE_STATE.read_text(encoding="utf-8"))
+            except Exception:
+                installed_core = {}
+            if installed_core.get("commit") != latest_sha:
+                raise RuntimeError("A atualização do núcleo não foi aplicada por completo")
+            changed_core_files = installed_core.get("files") or []
+            core_updated = (
+                previous_core_commit != latest_sha
+                and any(str(path).endswith(".py") for path in changed_core_files)
+            )
+            state_path.write_text(json.dumps({
+                "commit": latest_sha,
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "updated_files": changed_core_files,
+                "restart_required": core_updated,
+            }, indent=2), encoding="utf-8")
+            logging.info("Atualização do núcleo verificada; arquivos: %s; reinício necessário: %s",
+                         changed_core_files, core_updated)
+            if core_updated:
+                restart_application()
+            return
         updated = []
         for relative in ("public/index.html", "public/local-whisper.js"):
             data = _download(f"{RAW_BASE}/{latest_sha}/{relative}?v={latest_sha}")
@@ -191,6 +222,29 @@ def check_web_updates():
     except Exception:
         logging.exception("Falha ao verificar/aplicar atualização web em segundo plano")
 
+def restart_application():
+    """Abre a versão atualizada e encerra esta instância para reiniciar o aplicativo."""
+    try:
+        env = os.environ.copy()
+        env["SEXTA_FEIRA_RESTART_DELAY"] = "1"
+        creationflags = (
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            | getattr(subprocess, "DETACHED_PROCESS", 0)
+        )
+        subprocess.Popen(
+            [sys.executable, str(ROOT / "desktop_app.py")],
+            cwd=str(ROOT),
+            env=env,
+            creationflags=creationflags,
+            close_fds=True,
+        )
+        logging.warning("Núcleo atualizado; reiniciando a Sexta-Feira.")
+        time.sleep(0.5)
+        os._exit(0)
+    except Exception:
+        logging.exception("Não foi possível reiniciar automaticamente após a atualização")
+
+
 def update_loop():
     """Verifica atualizações a cada 5 minutos sem bloquear a interface."""
     while True:
@@ -203,6 +257,10 @@ def port_open():
         return sock.connect_ex((APP_HOST, APP_PORT)) == 0
 
 def main():
+    # Dá tempo para a instância anterior liberar a porta após um reinício automático.
+    if os.environ.pop("SEXTA_FEIRA_RESTART_DELAY", None):
+        time.sleep(2)
+
     # Executa antes de importar local_agent e antes de abrir a interface para carregar
     # os arquivos novos nesta sessão. Falhas de internet não bloqueiam a assistente.
     check_and_apply_updates()
