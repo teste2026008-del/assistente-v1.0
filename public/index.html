@@ -68,6 +68,26 @@ if(localMode&&/^(?:apague|limpe|esqueça|apagar|limpar) (?:toda a )?(?:minha |su
 if(localMode){const local=await tryLocalAction(text);if(local){window.localAssistantBusy=true;bubble('VOCÊ',text);showLast('VOCÊ',text);bubble('SEXTA-FEIRA',local);showLast('SEXTA-FEIRA',local);speak(local);return}}
 const contextualMessage=buildContextualMessage(text);if(localMode){memoryHistory.push({role:'user',text});memoryHistory=memoryHistory.slice(-12);await savePersistentMemory()}busy=true;window.localAssistantBusy=true;bubble('VOCÊ',text);showLast('VOCÊ',text);$('prompt').value='';$('send').disabled=true;setState('PENSANDO');try{const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:contextualMessage})});let data={};try{data=await res.json()}catch{}if(!res.ok)throw new Error([data.error,data.detail].filter(Boolean).join(' — ')||'O serviço de IA não respondeu.');const answer=data.reply||'Não recebi uma resposta válida.';bubble('SEXTA-FEIRA',answer);showLast('SEXTA-FEIRA',answer);if(localMode){memoryHistory.push({role:'assistant',text:answer});memoryHistory=memoryHistory.slice(-12);await savePersistentMemory()}speak(answer)}catch(e){const msg=e.message||'Falha de conexão com o servidor.';$('hint').textContent='Erro ao responder: '+msg;bubble('SISTEMA',msg);showLast('SISTEMA',msg);setState('VERIFIQUE A CONEXÃO')}finally{busy=false;window.localAssistantBusy=false;$('send').disabled=false}}
 $('form').addEventListener('submit',e=>{e.preventDefault();send($('prompt').value)});
+function showLocalMedia(data){
+ if(data.video_url){
+  let panel=$('localVideoPanel');if(panel)panel.remove();
+  panel=document.createElement('section');panel.id='localVideoPanel';panel.setAttribute('aria-label','Player de vídeo e música');panel.style.cssText='position:fixed;z-index:30;left:50%;bottom:110px;transform:translateX(-50%);width:min(720px,calc(100vw - 28px));padding:12px;border:1px solid #9b7cff88;border-radius:16px;background:#100e0bf5;box-shadow:0 12px 40px #000b';
+  const bar=document.createElement('div');bar.style.cssText='display:flex;justify-content:space-between;align-items:center;color:#d9ccff;font-size:13px;margin-bottom:8px';bar.innerHTML='<strong></strong><button type="button" aria-label="Fechar player" style="min-width:32px;height:30px">×</button>';bar.querySelector('strong').textContent=data.title||'Música';bar.querySelector('button').onclick=()=>panel.remove();
+  const frame=document.createElement('iframe');frame.title='Player de música do YouTube';frame.src=data.video_url;frame.allow='autoplay; encrypted-media; picture-in-picture';frame.allowFullscreen=true;frame.referrerPolicy='strict-origin-when-cross-origin';frame.style.cssText='display:block;width:100%;height:min(56vw,405px);max-height:55vh;border:0;border-radius:10px;background:#000';panel.append(bar,frame);document.body.appendChild(panel);
+ }
+ if(data.audio_url){
+  let panel=$('localMediaPanel');
+  if(!panel){panel=document.createElement('section');panel.id='localMediaPanel';panel.setAttribute('aria-label','Player de música');panel.style.cssText='position:fixed;z-index:30;left:50%;bottom:110px;transform:translateX(-50%);width:min(560px,calc(100vw - 28px));padding:14px 16px;border:1px solid #9b7cff88;border-radius:16px;background:#100e0bf5;box-shadow:0 12px 40px #000b';panel.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;color:#d9ccff;font-size:13px;margin-bottom:8px"><strong id="localMediaTitle"></strong><button id="localMediaClose" type="button" aria-label="Fechar player" style="min-width:32px;height:30px">×</button></div><audio id="localMusicPlayer" controls style="width:100%"></audio>';document.body.appendChild(panel);$('localMediaClose').onclick=()=>{const p=$('localMusicPlayer');p.pause();panel.remove()}}
+  $('localMediaTitle').textContent=data.title||'Música';
+  const player=$('localMusicPlayer');player.src=data.audio_url;player.load();player.play().catch(()=>{});
+ }
+ if(data.preview_html){
+  let panel=$('sitePreviewPanel');if(panel)panel.remove();
+  panel=document.createElement('section');panel.id='sitePreviewPanel';panel.setAttribute('aria-label','Prévia do site criado');panel.style.cssText='position:fixed;z-index:40;inset:5vh 4vw;background:#0d0b13;border:1px solid #9b7cff88;border-radius:18px;box-shadow:0 20px 80px #000d;display:flex;flex-direction:column;overflow:hidden';
+  const bar=document.createElement('div');bar.style.cssText='display:flex;justify-content:space-between;align-items:center;padding:10px 14px;color:#eee';bar.innerHTML='<strong>Prévia do site</strong><button type="button" aria-label="Fechar prévia">Fechar</button>';bar.querySelector('button').onclick=()=>panel.remove();
+  const frame=document.createElement('iframe');frame.title='Prévia segura do site';frame.setAttribute('sandbox','allow-scripts');frame.referrerPolicy='no-referrer';frame.style.cssText='width:100%;height:100%;border:0;background:white';frame.srcdoc=data.preview_html;panel.append(bar,frame);document.body.appendChild(panel);
+ }
+}
 async function tryLocalAction(text){
  const original=String(text||'').trim().replace(/\byou\s*tube\b/gi,'youtube').replace(/\bo\s+tube\b/gi,'youtube');
  const norm=v=>String(v||'').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.,!?;:]/g,' ').replace(/\s+/g,' ').trim();
@@ -128,14 +148,20 @@ async function tryLocalAction(text){
    return best;
  }
  // Comandos diretos e frases compostas: priorizar ações reais antes da conversa genérica.
- // Música: interpretar pedido completo e usar contexto para artista dito em seguida.
+ // Música fica no app: procura faixas locais e usa o player integrado.
  const musicGeneric='músicas populares brasileiras';
- if(/\byoutube\b/i.test(s) && /\b(?:musica|musicas|musculo|video|videos|toca|toque|coloca|coloque|bota|reproduz|reproduza|ouvir|escutar)\b/i.test(s)){
-   let q=original.replace(/.*?\byoutube(?:\.com)?\b/i,' ');
-   q=q.replace(/\b(?:nao|não|me|por favor|mano|e|ai|aí|abre|abrir|abra|coloca|coloque|colocar|bota|ponha|toca|toque|tocar|reproduz|reproduza|procura|procure|pesquisa|pesquise|busca|busque|quero ouvir|quero escutar|qualquer|uma|um|musica|músicas|música|musculo|músculo|video|vídeo|videos|vídeos|na|no|da|do|de|com|para|pra|a|o|em|dono da toca|na nasa a dor)\b/gi,' ');
+ const followup=/^(?:qualquer uma dela|uma qualquer dela|pode ser qualquer uma dela)$/i.test(norm(original));
+ if(localStorage.getItem('sextaPendingMusic')==='1' && followup && localStorage.getItem('sextaLastMusicQuery')){
+   action={type:'music_play',query:localStorage.getItem('sextaLastMusicQuery')};
+   localStorage.setItem('sextaPendingMusic','0');
+ }else if(/\b(?:youtube|musica|musicas|musculo|video|toca|toque|coloca|coloque|bota|reproduz|reproduza|ouvir|escutar)\b/i.test(s) && /\b(?:toca|toque|coloca|coloque|bota|reproduz|reproduza|ouvir|escutar|musica|musicas|youtube)\b/i.test(s)){
+   let q=original;
+   q=q.replace(/.*?\byoutube(?:\.com)?\b/i,' ');
+   q=q.replace(/^(?:sexta[- ]feira[, ]*)?(?:e\s+)?(?:quero\s+)?(?:toca|toque|tocar|coloca|coloque|colocar|bota|botar|reproduz|reproduza|reproduzir|ouvir|escutar)\s+/i,'');
+   q=q.replace(/\b(?:qualquer|uma|um|musica|música|musicas|músicas|musculo|músculo|video|vídeo|videos|vídeos|na|no|da|do|de|com|por favor|mano|dela|dele|qualquer uma dela)\b/gi,' ');
    q=q.replace(/[.,!?;:]+/g,' ').replace(/\s+/g,' ').trim();
-   if(!q || /^(?:musica|musicas|video|videos)$/i.test(norm(q)))q=musicGeneric;
-   action={type:'youtube_search',query:q};
+   if(!q || /^(?:e|qualquer|uma|um)$/i.test(norm(q)))q=musicGeneric;
+   action={type:'music_play',query:q};
    localStorage.setItem('sextaPendingMusic','1');
  }
  if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:(?:abre|abra|abrir|vai|vá|acesse|acessa|acessar)\s+)?(?:o\s+)?(?:youtube|youtube\.com)(?:\s+e)?\s+(?:(?:bota|coloca|coloque|toca|toque|reproduz|reproduza|abre|abrir|procura|procure|pesquisa|pesquise|busca|busque)\s+)?(.+)$/i))){
@@ -144,29 +170,29 @@ async function tryLocalAction(text){
    q=q.replace(/^(?:qualquer musica|uma musica qualquer|alguma musica|qualquer video|um video qualquer)$/i,musicGeneric);
    q=q.replace(/^(?:uma musica|musica|musicas|um video|video)\s+(?:do|da|de|com)\s+/i,'');
    if(/^(?:qualquer musica|uma musica qualquer|alguma musica|musica|musicas|um video|video|qualquer video)$/i.test(q))q=musicGeneric;
-   action={type:'youtube_search',query:q||musicGeneric};
+   action={type:'music_play',query:q||musicGeneric};
    localStorage.setItem('sextaPendingMusic','1');
  }
  else if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:coloca|coloque|toca|toque|bota|ponha|reproduz|reproduza|quero ouvir|quero escutar|põe|poe)\s+(.+)$/i))){
    let q=m[1].trim().replace(/^(?:qualquer musica|uma musica qualquer|alguma musica)$/i,musicGeneric);
    q=q.replace(/^(?:musica|musicas|video|videos)\s+(?:do|da|de|com)\s+/i,'');
    if(/^(?:qualquer musica|uma musica qualquer|alguma musica|musica|musicas)$/i.test(q))q=musicGeneric;
-   action={type:'youtube_search',query:q||musicGeneric};
+   action={type:'music_play',query:q||musicGeneric};
    localStorage.setItem('sextaPendingMusic','1');
  }
  else if(localStorage.getItem('sextaPendingMusic')==='1' && /^(?:qualquer uma dela|uma qualquer dela|pode ser qualquer uma dela)$/.test(s) && localStorage.getItem('sextaLastMusicQuery')){
-   action={type:'youtube_search',query:localStorage.getItem('sextaLastMusicQuery')};
+   action={type:'music_play',query:localStorage.getItem('sextaLastMusicQuery')};
    localStorage.setItem('sextaPendingMusic','0');
  }
- else if(localStorage.getItem('sextaPendingMusic')==='1' && s.length>=3 && s.length<=80 && !/^(?:sim|nao|não|obrigado|obrigada|cancela|cancelar|para|parar|sexta feira|bom dia|boa tarde|boa noite)$/i.test(s) && !/^(?:abre|abra|fecha|feche|que horas|qual|como|pesquisa|procura|coloca|toca)\b/i.test(s)){
-   action={type:'youtube_search',query:original};
+ else if(localStorage.getItem('sextaPendingMusic')==='1' && s.length>=3 && s.length<=80 && !/^(?:sim|nao|não|obrigado|obrigada|cancela|cancelar|para|parar|sexta feira|bom dia|boa tarde|boa noite)$/i.test(s) && !/^(?:abre|abra|fecha|feche|que horas|qual|como|pesquisa|procura|coloca|toca|crie|criar|faca|fazer|construa|monte|site|website|pagina)\b/i.test(s)){
+   action={type:'music_play',query:original};
    localStorage.setItem('sextaPendingMusic','0');
  }
  if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:(?:e|entao)\s+)?(?:abre|abra|abrir|acesse|acessa|acessar|entra em|entre em|vai para|ir para|abre o site)\s+(?:o\s+|a\s+|site\s+)?(https?:\/\/\S+|(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/\S*)?)(?:\s+(?:abre|abrir|por favor))?$/i))) {
    let url=m[1].replace(/[.,!?;]+$/,''); if(!/^https?:\/\//i.test(url))url='https://'+url;
    action={type:'open_url',url};
  }
- else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?youtube\s+(?:e\s+)?(?:toque|toca|coloque|coloca|reproduza|reproduzir|procure|pesquise|busque)\s+(.+)$/i)))action={type:'youtube_search',query:m[1].replace(/^(?:uma?\s+)?musica\s+(?:do|da|de)\s+/i,'')};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?youtube\s+(?:e\s+)?(?:toque|toca|coloque|coloca|reproduza|reproduzir|procure|pesquise|busque)\s+(.+)$/i)))action={type:'music_play',query:m[1].replace(/^(?:uma?\s+)?musica\s+(?:do|da|de)\s+/i,'')};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar|mata|finaliza|finalize)\s+(?:completamente\s+)?(?:(?:o|a)\s+)?(?:(?:aplicativo|programa|janela)\s+(?:da|do|de)\s+)?(.+?)(?:\s+(?:completamente|totalmente|de vez|por completo))?$/i))){
    let target=m[1].replace(/^(?:o|a|meu|minha)\s+/,'').trim();
    if(/^(?:aplicativo|programa|janela|app)$/i.test(target))target=localStorage.getItem('sextaLastApp')||'';
@@ -181,9 +207,9 @@ async function tryLocalAction(text){
    const previous=localStorage.getItem('sextaLastApp')||'';
    if(previous)action={type:'close_app',name:previous};
  }
- else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:meu\s+)?navegador\s+(?:e\s+)?(?:abre\s+(?:o\s+)?youtube\s+e\s+)?(?:toca|toque|coloca|coloque|bota|ponha|reproduz|reproduza)\s+(?:uma\s+)?musica(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'youtube_search',query:m[1]||'músicas populares brasileiras'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:meu\s+)?navegador\s+(?:e\s+)?(?:abre\s+(?:o\s+)?youtube\s+e\s+)?(?:toca|toque|coloca|coloque|bota|ponha|reproduz|reproduza)\s+(?:uma\s+)?musica(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'music_play',query:m[1]||'músicas populares brasileiras'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:meu\s+)?navegador(?:\s+(?:e\s+)?(?:abre|abra|acesse|acessa)\s+(?:o\s+)?youtube)?[!. ]*$/i)))action=/youtube/.test(s)?{type:'open_url',url:'https://www.youtube.com'}:{type:'open_browser'};
- else if((m=s.match(/^(?:sexta feira[, ]*)?(?:coloca|coloque|toca|toque|reproduz|reproduza|bota|ponha)\s+(?:uma\s+)?(?:musica|som)(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'youtube_search',query:m[1]||'músicas populares brasileiras'};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:coloca|coloque|toca|toque|reproduz|reproduza|bota|ponha)\s+(?:uma\s+)?(?:musica|som)(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'music_play',query:m[1]||'músicas populares brasileiras'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:youtube|youtube music)$/i)))action={type:'open_url',url:'https://www.youtube.com'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar)\s+(?:o\s+)?(?:aplicativo|programa|app|janela)$/i))){
    const previous=localStorage.getItem('sextaLastApp')||'';
@@ -214,12 +240,12 @@ async function tryLocalAction(text){
  else if(/^(?:sexta feira[, ]*)?(?:pause|pausar|pausa|continue|continuar|retome|retomar|play|reproduza|reproduzir) (?:a )?(?:musica|reproducao|video|som)[!. ]*$/i.test(s))action={type:'media_control',command:'play_pause'};
  else if(/^(?:sexta feira[, ]*)?(?:proxima musica|proxima faixa|pule a musica)[!. ]*$/i.test(s))action={type:'media_control',command:'next_track'};
  else if(/^(?:sexta feira[, ]*)?(?:musica anterior|faixa anterior|volte a musica)[!. ]*$/i.test(s))action={type:'media_control',command:'previous_track'};
- else if((m=s.match(/^(?:sexta feira[, ]*)?(?:toque|toca|tocar|coloque|coloca|colocar|reproduza|reproduzir|procure|procurar|pesquise|pesquisar|busque|buscar)\s+(?:a musica\s+|musica\s+)?(.+?)\s+(?:no youtube|pelo youtube|no YouTube)$/i)))action={type:'youtube_search',query:m[1]};
- else if((m=s.match(/^(?:sexta feira[, ]*)?(?:toque|toca|tocar|coloque|coloca|colocar|reproduza|reproduzir|procure|procurar|pesquise|pesquisar|busque|buscar)\s+(?:a musica\s+|musica\s+)?(.+)$/i)))action={type:'youtube_search',query:m[1]};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:toque|toca|tocar|coloque|coloca|colocar|reproduza|reproduzir|procure|procurar|pesquise|pesquisar|busque|buscar)\s+(?:a musica\s+|musica\s+)?(.+?)\s+(?:no youtube|pelo youtube|no YouTube)$/i)))action={type:'music_play',query:m[1]};
+ else if((m=s.match(/^(?:sexta feira[, ]*)?(?:toque|toca|tocar|coloque|coloca|colocar|reproduza|reproduzir|procure|procurar|pesquise|pesquisar|busque|buscar)\s+(?:a musica\s+|musica\s+)?(.+)$/i)))action={type:'music_play',query:m[1]};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abra|abre|abrir)\s+(?:o )?(?:youtube|youtube music)$/i)))action={type:'open_url',url:'https://www.youtube.com'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:pesquise|pesquisar|procure|buscar|busque|pesquisa na internet)\s+(.+)$/i)))action={type:'web_search',query:m[1]};
  else if((m=s.match(new RegExp('^'+prefix+verb+' '+optional+'(?:pasta )?(downloads|documentos|area de trabalho|desktop|imagens|musicas|musica|videos|video)$','i'))))action={type:'open_folder',name:m[1]};
- else if((m=s.match(new RegExp('^'+prefix+verb+'\\s+(.+)$','i')))){
+ else if((m=s.match(new RegExp('^'+prefix+verb+'\s+(.+)$','i')))){
    const target=m[1].replace(/^(?:a|o|as|os|minha|minhas|meu|meus|uma|um)\s+/,'').trim();
    const app=findApp(target);
    if(app)action={type:'open_app',name:app};
@@ -254,10 +280,17 @@ async function tryLocalAction(text){
  else if(/^(?:sexta feira[, ]*)?(?:tire uma captura de tela|capturar a tela|capture a tela|abrir captura de tela|abra a ferramenta de captura|print da tela)[?!. ]*$/i.test(s))action={type:'screenshot'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:faca uma previa de organizacao|organize|organizar|analise) (?:a pasta )?(downloads|documentos|area de trabalho|desktop)[?!. ]*$/i)))action={type:'organize_preview',name:m[1]};
  }
+ if(!action){
+  const sm=original.match(/^(?:sexta[- ]feira[, ]*)?(?:quero\s+)?(?:crie|criar|faca|fazer|construa|construir|monte|montar)\s+(?:um\s+|uma\s+)?(?:site|website|pagina|página)(?:\s+(?:para|sobre|de)\s+(.+))?$/i);
+  if(sm){action={type:'create_site',request:(sm[1]||'site institucional moderno').trim()};localStorage.setItem('sextaPendingMusic','0')}
+ }
+ const youtubeVideoMatch=original.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i);
+ if(youtubeVideoMatch)action={type:'music_embed',video_url:'https://www.youtube-nocookie.com/embed/'+youtubeVideoMatch[1]+'?autoplay=1&playsinline=1',title:'Vídeo do YouTube'};
  if(!action)return null;
- if(action.type==="youtube_search" && action.query && !/^músicas populares brasileiras$/i.test(action.query))localStorage.setItem("sextaLastMusicQuery",action.query);
+ if(action.type==="music_play" && action.query && !/^músicas populares brasileiras$/i.test(action.query)){localStorage.setItem("sextaLastMusicQuery",action.query);localStorage.setItem("sextaPendingMusic",followup?"0":"1");}
+ if(action.type==="music_embed"){localStorage.setItem("sextaPendingMusic","0");showLocalMedia({video_url:action.video_url,title:action.title});return "Abri no player da Sexta-Feira. Se a reprodução automática for bloqueada, toque no botão de reproduzir."; }
  if(action.type==="open_app"||action.type==="close_app")localStorage.setItem("sextaLastApp",action.name);
- try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();return r.ok?(d.message||'Comando concluído.'):('Não consegui executar: '+(d.error||r.statusText))}
+ try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();if(!r.ok)return 'Não consegui executar: '+(d.error||r.statusText);showLocalMedia(d);return d.message||'Comando concluído.'}
  catch(e){return 'Não consegui acessar o agente local: '+(e.message||e)}
 }
 // O reconhecimento nativo SpeechRecognition foi desativado porque falha com erro "network" no Opera/WebView.
