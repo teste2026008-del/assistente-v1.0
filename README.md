@@ -7,7 +7,9 @@ Assistente de programação em português brasileiro, com interface de conversa,
 - Interface responsiva em `public/index.html`.
 - Captura de voz pelo reconhecimento de fala do navegador (quando suportado).
 - Leitura das respostas com a síntese de voz do navegador.
-- Endpoint `/api/chat` em `src/index.js`, preparado para Cloudflare Workers AI.
+- Respostas de conversa geradas pelo Workers AI no próprio painel, sem abrir o navegador.
+- Endpoint `/api/create-site` em `src/index.js`: gera uma página HTML única; o agente local salva em `Documentos\\Sexta-Feira Sites` e mostra uma prévia isolada no app. O endpoint limita cada endereço IP a quatro criações por minuto.
+- Player dentro do app para músicas encontradas nas pastas Música e Downloads, além de links diretos de vídeo do YouTube. A busca de artista usa nomes de arquivos locais; buscar no catálogo do YouTube exige uma integração de catálogo/API.
 - O agente local pode abrir uma janela própria de navegador com Playwright, navegar, ler conteúdo, clicar em links, preencher campos e baixar arquivos oferecidos por uma página.
 - Downloads por link HTTP/HTTPS direto vão para pastas conhecidas do usuário, sem sobrescrever arquivos existentes.
 
@@ -20,7 +22,7 @@ Assistente de programação em português brasileiro, com interface de conversa,
 5. Para atualizar arquivos sem baixar outro ZIP, execute `ATUALIZAR-SEXTA-FEIRA.ps1` no PowerShell depois que o repositório estiver público. O script cria um backup antes de substituir os arquivos.
 6. O Whisper usa o cache do navegador/WebView quando disponível. Na primeira utilização, o modelo pode precisar ser baixado.
 
-Comandos locais: abrir sites, pesquisar na web, abrir aplicativos e pastas conhecidas, listar pastas, consultar informações do computador, controlar uma janela de navegador isolada, baixar arquivos por link direto ou por link visível na página, consultar Git e criar notas. Não executa comandos arbitrários nem abre ou executa automaticamente arquivos baixados. O navegador controlável usa um perfil separado; ele não assume a sessão já aberta do Chrome/Edge. Para links que exigem login, captcha ou confirmação, o usuário pode precisar concluir a etapa no navegador.
+Comandos locais: tocar áudio salvo nas pastas Música/Downloads, reproduzir links diretos do YouTube no player embutido, criar sites por descrição, abrir sites, pesquisar na web, abrir aplicativos e pastas conhecidas, listar pastas, consultar informações do computador, controlar uma janela de navegador isolada, baixar arquivos por link direto ou por link visível na página, consultar Git e criar notas. Não executa comandos arbitrários nem abre ou executa automaticamente arquivos baixados. O navegador controlável usa um perfil separado; ele não assume a sessão já aberta do Chrome/Edge. Para links que exigem login, captcha ou confirmação, o usuário pode precisar concluir a etapa no navegador.
 
 ## Publicar no Cloudflare Workers
 
@@ -30,7 +32,7 @@ Comandos locais: abrir sites, pesquisar na web, abrir aplicativos e pastas conhe
 4. Confira a disponibilidade e os limites do Workers AI na sua conta.
 5. Execute `npx wrangler deploy`.
 
-O arquivo `wrangler.jsonc` define o binding `AI`. Verifique o modelo disponível para sua conta antes de usar em produção. A voz usa recursos do navegador e pode variar entre Chrome, Edge e outros navegadores.
+O arquivo `wrangler.jsonc` define o binding `AI`. As rotas de conversa e criação de sites usam Workers AI; `/api/create-site` tem um limite simples por endereço IP. Verifique o modelo disponível para sua conta antes de usar em produção. A voz usa recursos do navegador e pode variar entre Chrome, Edge e outros navegadores.
 
 ## Segurança
 
