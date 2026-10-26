@@ -2,8 +2,9 @@
 """Agente local da Sexta-Feira. Escuta somente em localhost."""
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse, quote_plus
-import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio, sys, io
+from urllib.parse import urlparse, quote_plus, unquote
+import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio, sys, io, ipaddress, socket, re, tempfile
+from email.message import Message
 from threading import Lock
 
 ROOT=Path(__file__).resolve().parent
@@ -92,6 +93,118 @@ APPS={
 }
 def normalize_key(value):
  return unicodedata.normalize("NFD",str(value or "").lower()).encode("ascii","ignore").decode("ascii").strip()
+
+MAX_DOWNLOAD_BYTES=100*1024*1024
+
+def _download_folder(label):
+ key=normalize_key(label or "downloads")
+ folder=FOLDERS.get(key)
+ if folder is None:
+  raise ValueError("Escolha uma pasta permitida: Downloads, Documentos, Área de Trabalho, Imagens, Músicas ou Vídeos.")
+ folder.mkdir(parents=True,exist_ok=True)
+ return folder
+
+def _validate_public_http_url(raw):
+ url=str(raw or "").strip()
+ if len(url)>2048: raise ValueError("O link é longo demais.")
+ parsed=urlparse(url)
+ if parsed.scheme not in ("http","https") or not parsed.hostname or parsed.username or parsed.password:
+  raise ValueError("Use um link HTTP ou HTTPS público, sem usuário ou senha no endereço.")
+ try: port=parsed.port
+ except ValueError: raise ValueError("A porta do endereço é inválida.")
+ expected=443 if parsed.scheme=="https" else 80
+ if port not in (None,expected): raise ValueError("Por segurança, só aceito as portas padrão de HTTP e HTTPS.")
+ try:
+  addresses=socket.getaddrinfo(parsed.hostname,port or expected,type=socket.SOCK_STREAM)
+  ips={ipaddress.ip_address(item[4][0].split("%")[0]) for item in addresses}
+ except (OSError,ValueError):
+  raise ValueError("Não consegui validar o endereço público. Confira o link e tente novamente.")
+ if not ips or any(not address.is_global for address in ips):
+  raise ValueError("Por segurança, não baixo arquivos de endereços locais ou privados.")
+ return parsed
+
+class _SafeDownloadRedirect(urllib.request.HTTPRedirectHandler):
+ def redirect_request(self,req,fp,code,msg,headers,newurl):
+  before=urlparse(req.full_url)
+  after=_validate_public_http_url(newurl)
+  if before.scheme=="https" and after.scheme!="https":
+   raise ValueError("O link tentou sair de HTTPS para uma conexão sem criptografia.")
+  return super().redirect_request(req,fp,code,msg,headers,newurl)
+
+def _safe_download_name(name):
+ value=str(name or "").replace("\\","/").rsplit("/",1)[-1]
+ value=re.sub(r'[<>:"/\\|?*\x00-\x1f]','_',value).strip(" .")
+ if not value or value in (".",".."): value="arquivo"
+ if len(value)>160:
+  suffix=Path(value).suffix[:20]
+  value=value[:160-len(suffix)].rstrip(" .")+suffix
+ if Path(value).stem.upper() in {"CON","PRN","AUX","NUL","COM1","COM2","COM3","COM4","COM5","COM6","COM7","COM8","COM9","LPT1","LPT2","LPT3","LPT4","LPT5","LPT6","LPT7","LPT8","LPT9"}:
+  value="_"+value
+ return value
+
+def _reserve_download_path(folder,filename):
+ base=_safe_download_name(filename)
+ stem=Path(base).stem or "arquivo";suffix=Path(base).suffix
+ for index in range(1,1000):
+  candidate=folder/(base if index==1 else f"{stem} ({index}){suffix}")
+  try:
+   fd=os.open(str(candidate),os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+   os.close(fd)
+   return candidate
+  except FileExistsError: continue
+ raise OSError("Não encontrei um nome de arquivo livre na pasta.")
+
+def _finish_download(temp_path,folder,filename):
+ temp_path=Path(temp_path)
+ size=temp_path.stat().st_size
+ if size<=0: raise ValueError("O arquivo recebido está vazio.")
+ if size>MAX_DOWNLOAD_BYTES: raise ValueError("O arquivo excede o limite de 100 MB.")
+ target=_reserve_download_path(folder,filename)
+ try: os.replace(str(temp_path),str(target))
+ except Exception:
+  try: target.unlink()
+  except OSError: pass
+  raise
+ return target,size
+
+def _download_http_file(url,folder):
+ parsed=_validate_public_http_url(url)
+ request=urllib.request.Request(parsed.geturl(),headers={"User-Agent":"Sexta-Feira-Local/1.0","Accept":"*/*"})
+ opener=urllib.request.build_opener(_SafeDownloadRedirect())
+ temp_path=None
+ try:
+  with opener.open(request,timeout=30) as response:
+   final_url=_validate_public_http_url(response.geturl())
+   if parsed.scheme=="https" and final_url.scheme!="https":
+    raise ValueError("O link terminou em uma conexão sem criptografia.")
+   length=response.headers.get("Content-Length")
+   if length:
+    try: expected_size=int(length)
+    except ValueError: expected_size=0
+    if expected_size>MAX_DOWNLOAD_BYTES: raise ValueError("O arquivo excede o limite de 100 MB.")
+   disposition=response.headers.get("Content-Disposition","")
+   message=Message();message["content-disposition"]=disposition
+   filename=message.get_filename() or Path(unquote(final_url.path)).name or "arquivo"
+   filename=_safe_download_name(filename)
+   content_type=response.headers.get("Content-Type","").split(";",1)[0].strip().lower()
+   if content_type=="text/html" and "attachment" not in disposition.lower() and Path(filename).suffix.lower() not in (".html",".htm"):
+    raise ValueError("Esse link abre uma página, não um arquivo direto. Use o navegador controlável e peça para baixar o link da página.")
+   with tempfile.NamedTemporaryFile(prefix=".sexta-download-",suffix=".part",dir=str(folder),delete=False) as target:
+    temp_path=Path(target.name);total=0
+    while True:
+     chunk=response.read(256*1024)
+     if not chunk: break
+     total+=len(chunk)
+     if total>MAX_DOWNLOAD_BYTES: raise ValueError("O arquivo excede o limite de 100 MB.")
+     target.write(chunk)
+  final_path,size=_finish_download(temp_path,folder,filename)
+  temp_path=None
+  return final_path,size
+ finally:
+  if temp_path is not None:
+   try: temp_path.unlink()
+   except OSError: pass
+
 
 class Handler(SimpleHTTPRequestHandler):
  def __init__(self,*a,**kw): super().__init__(*a,directory=str(PUBLIC),**kw)
@@ -306,6 +419,21 @@ class Handler(SimpleHTTPRequestHandler):
      if loc.count()==0:return self.send_json(404,{"error":"Não encontrei botão ou link com esse texto: "+target})
      loc.first.click(timeout=10000)
      return self.send_json(200,{"message":"Cliquei em: "+target})
+    if kind=="browser_download":
+     target=str(d.get("target","")).strip()[:250]
+     folder=_download_folder(d.get("folder","downloads"))
+     if not target:return self.send_json(400,{"error":"Diga o nome do link ou arquivo que devo baixar da página."})
+     link=_BROWSER_PAGE.get_by_role("link",name=target,exact=False)
+     if link.count()==0:return self.send_json(404,{"error":"Não encontrei um link com esse nome na página: "+target})
+     with _BROWSER_PAGE.expect_download(timeout=30000) as download_info:
+      link.first.click(timeout=10000)
+     download=download_info.value
+     if download.failure():return self.send_json(502,{"error":"O site não concluiu o download: "+str(download.failure())[:180]})
+     with tempfile.TemporaryDirectory(prefix=".sexta-download-",dir=str(folder)) as temporary:
+      temp_path=Path(temporary)/_safe_download_name(download.suggested_filename)
+      download.save_as(str(temp_path))
+      final_path,size=_finish_download(temp_path,folder,download.suggested_filename)
+     return self.send_json(200,{"message":f"Baixei {final_path.name} para {folder} ({size/1024/1024:.1f} MB).","path":str(final_path)})
     if kind=="browser_fill":
      target=str(d.get("target","")).strip()[:250];value=str(d.get("value",""))[:4000]
      if not target:return self.send_json(400,{"error":"Diga o nome ou rótulo do campo que devo preencher."})
@@ -330,7 +458,7 @@ class Handler(SimpleHTTPRequestHandler):
     return self.send_json(500,{"error":"Falha no controle do navegador: "+str(e)[:260]})
  def action(self,d):
   k=d.get("type")
-  if k in ("browser_start","browser_navigate","browser_snapshot","browser_click","browser_fill","browser_type","browser_press","browser_stop"):
+  if k in ("browser_start","browser_navigate","browser_snapshot","browser_click","browser_fill","browser_type","browser_press","browser_download","browser_stop"):
    return self.browser_action(d)
   if k=="create_reminder":
    text=str(d.get("text","")).strip()[:300]
@@ -348,6 +476,15 @@ class Handler(SimpleHTTPRequestHandler):
    lines=[]
    for x in items[:20]: lines.append(str(x.get("due",""))[:16].replace("T"," às ")+" — "+str(x.get("text","")))
    return self.send_json(200,{"message":"Seus lembretes pendentes:\n"+"\n".join(lines)})
+  if k=="download_file":
+   url=str(d.get("url","")).strip()
+   try:
+    folder=_download_folder(d.get("folder","downloads"))
+    final_path,size=_download_http_file(url,folder)
+    return self.send_json(200,{"message":f"Baixei {final_path.name} para {folder} ({size/1024/1024:.1f} MB).","path":str(final_path)})
+   except ValueError as e:return self.send_json(400,{"error":str(e)})
+   except urllib.error.HTTPError as e:return self.send_json(502,{"error":f"O site respondeu com erro HTTP {e.code}."})
+   except Exception as e:return self.send_json(502,{"error":"Não consegui baixar o arquivo: "+str(e)[:180]})
   if k=="youtube_search":
    q=str(d.get("query","")).strip()[:250]
    if not q:return self.send_json(400,{"error":"Diga o nome da música ou artista."})
