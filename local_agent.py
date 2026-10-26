@@ -3,7 +3,7 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, quote_plus, unquote
-import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio, sys, io, ipaddress, socket, re, tempfile
+import json, platform, subprocess, webbrowser, urllib.request, urllib.error, datetime, os, unicodedata, asyncio, sys, io, ipaddress, socket, re, tempfile, hashlib, mimetypes
 from email.message import Message
 from threading import Lock
 
@@ -14,6 +14,8 @@ NOTES=ROOT/"notas"
 MEMORY_DIR=Path.home()/"AppData"/"Local"/"Sexta-Feira"
 MEMORY_FILE=MEMORY_DIR/"memoria.json"
 REMINDERS_FILE=MEMORY_DIR/"lembretes.json"
+_MUSIC_INDEX={}
+_MUSIC_EXTENSIONS={".mp3",".wav",".m4a",".aac",".ogg",".flac",".opus"}
 MEMORY_DIR.mkdir(parents=True,exist_ok=True)
 HOST,PORT="127.0.0.1",8765
 # Controle de navegador isolado, iniciado somente quando o usuário pedir.
@@ -224,6 +226,39 @@ class Handler(SimpleHTTPRequestHandler):
     state=json.loads((MEMORY_DIR/"web-update-state.json").read_text(encoding="utf-8"))
    except Exception: state={"commit":"","restart_required":False}
    return self.send_json(200,state)
+  if p=="/api/music/file":
+   params=urllib.parse.parse_qs(urlparse(self.path).query)
+   file_id=(params.get("id") or [""])[0]
+   target=_MUSIC_INDEX.get(file_id)
+   if not target:return self.send_json(404,{"error":"Faixa não encontrada. Peça para a Sexta-Feira procurar novamente."})
+   try:
+    path=Path(target).resolve(strict=True)
+    roots=[(Path.home()/"Music").resolve(),(Path.home()/"Downloads").resolve()]
+    if not any(path==root or root in path.parents for root in roots) or path.suffix.lower() not in _MUSIC_EXTENSIONS or not path.is_file():return self.send_json(403,{"error":"A faixa está fora das pastas de música permitidas."})
+    size=path.stat().st_size
+    start,end=0,size-1;status=200
+    byte_range=self.headers.get("Range","")
+    if byte_range.startswith("bytes="):
+     spec=byte_range[6:].split(",",1)[0].strip()
+     left,right=(spec.split("-",1)+[""])[:2]
+     if left:
+      start=int(left);end=min(int(right),size-1) if right else size-1
+     elif right:
+      suffix=int(right);start=max(0,size-suffix)
+     if start>=size or end<start:
+      self.send_response(416);self.send_header("Content-Range",f"bytes */{size}");self.end_headers();return
+     status=206
+    length=end-start+1;self.send_response(status);self.send_header("Content-Type",mimetypes.guess_type(path.name)[0] or "application/octet-stream");self.send_header("Accept-Ranges","bytes");self.send_header("Content-Length",str(length));self.send_header("Content-Disposition","inline; filename*=UTF-8''"+quote_plus(path.name));self.send_header("Cache-Control","no-store")
+    if status==206:self.send_header("Content-Range",f"bytes {start}-{end}/{size}")
+    self.end_headers()
+    with path.open("rb") as media:
+     media.seek(start);remaining=length
+     while remaining:
+      chunk=media.read(min(65536,remaining))
+      if not chunk:break
+      self.wfile.write(chunk);remaining-=len(chunk)
+   except (OSError,ValueError,OverflowError):return self.send_json(404,{"error":"Não consegui abrir essa faixa."})
+   return
   if p=="/api/memory": return self.memory_get()
   if p=="/api/reminders/check": return self.reminders_check()
   if p=="/api/reminders": return self.reminders_get()
@@ -485,17 +520,59 @@ class Handler(SimpleHTTPRequestHandler):
    except ValueError as e:return self.send_json(400,{"error":str(e)})
    except urllib.error.HTTPError as e:return self.send_json(502,{"error":f"O site respondeu com erro HTTP {e.code}."})
    except Exception as e:return self.send_json(502,{"error":"Não consegui baixar o arquivo: "+str(e)[:180]})
-  if k=="youtube_search":
-   q=str(d.get("query","")).strip()[:250]
-   if not q:return self.send_json(400,{"error":"Diga o nome da música ou artista."})
-   q=q.strip().strip('.,!?;:')
-   if normalize_key(q) in ("musica","uma musica","alguma musica","musicas","uma musica boa","musicas boas","qualquer musica","uma musica qualquer","alguma musica brasileira","video","um video","qualquer video"):q="músicas populares brasileiras"
-   url="https://www.youtube.com/results?search_query="+quote_plus(q)
+  if k=="music_play":
+   query=str(d.get("query","")).strip()[:160]
+   wanted=normalize_key(query)
+   roots=[Path.home()/"Music",Path.home()/"Downloads"]
+   matches=[]
+   for root in roots:
+    if not root.exists():continue
+    try:
+     for path in root.rglob("*"):
+      if len(matches)>=3000:break
+      try:
+       if path.is_file() and path.suffix.lower() in _MUSIC_EXTENSIONS and not path.is_symlink():
+        resolved=path.resolve()
+        if resolved==root.resolve() or root.resolve() in resolved.parents:matches.append(path)
+      except OSError:continue
+    except OSError:continue
+   matches.sort(key=lambda p:p.stat().st_mtime,reverse=True)
+   if wanted and wanted not in ("musicas populares brasileiras","musica popular brasileira"):
+    matching=[p for p in matches if wanted in normalize_key(p.stem)]
+    if not matching:
+     terms=[part for part in wanted.split() if len(part)>2]
+     matching=[p for p in matches if terms and sum(1 for term in terms if term in normalize_key(p.stem))>=max(1,len(terms)//2)]
+    matches=matching
+   if not matches:
+    return self.send_json(200,{"message":"Não encontrei uma faixa compatível nas pastas Música e Downloads. Coloque um arquivo de áudio nessas pastas ou diga o nome de uma música que já esteja salva no computador."})
+   chosen=matches[0];stat=chosen.stat();file_id=hashlib.sha256((str(chosen.resolve())+str(stat.st_size)+str(stat.st_mtime_ns)).encode("utf-8")).hexdigest()
+   _MUSIC_INDEX[file_id]=str(chosen.resolve())
+   title=chosen.stem
+   return self.send_json(200,{"message":"Encontrei "+title+" e abri no player da Sexta-Feira.","title":title,"audio_url":"/api/music/file?id="+file_id})
+  if k=="create_site":
+   request_text=str(d.get("request","")).strip()[:2500]
+   if not request_text:return self.send_json(400,{"error":"Diga sobre o que deve ser o site."})
    try:
-    opened=webbrowser.open(url,new=2)
-    if not opened:return self.send_json(502,{"error":"Não consegui confirmar a abertura do YouTube. Verifique se há um navegador padrão configurado."})
-    return self.send_json(200,{"message":"Abri o YouTube e pesquisei: "+q+". Escolha um resultado para iniciar a reprodução."})
-   except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o YouTube: "+str(e)[:150]})
+    payload=json.dumps({"request":request_text},ensure_ascii=False).encode("utf-8")
+    req=urllib.request.Request(WORKER+"/api/create-site",data=payload,headers={"Content-Type":"application/json"},method="POST")
+    with urllib.request.urlopen(req,timeout=100) as response:generated=json.loads(response.read(150000).decode("utf-8"))
+    html=generated.get("html","")
+    if not isinstance(html,str) or len(html)>120000 or "<html" not in html.lower() or "</html>" not in html.lower():return self.send_json(502,{"error":"A IA não gerou uma página HTML completa e segura para salvar."})
+    folder=Path.home()/"Documents"/"Sexta-Feira Sites";folder.mkdir(parents=True,exist_ok=True)
+    stamp=datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    path=folder/("site-"+stamp+".html")
+    suffix=2
+    while path.exists():
+     path=folder/("site-"+stamp+"-"+str(suffix)+".html");suffix+=1
+    path.write_text(html,encoding="utf-8")
+    return self.send_json(200,{"message":"Criei o site e salvei em "+str(path)+". A prévia está aberta dentro da Sexta-Feira.","path":str(path),"preview_html":html})
+   except urllib.error.HTTPError as e:
+    try:detail=json.loads(e.read(3000).decode("utf-8")).get("error","")
+    except Exception:detail=""
+    return self.send_json(502,{"error":"A criação do site não respondeu corretamente."+(" "+detail if detail else "")})
+   except Exception as e:return self.send_json(502,{"error":"Não consegui criar o site: "+str(e)[:180]})
+  if k=="youtube_search":
+   return self.action({"type":"music_play","query":d.get("query","")})
   if k=="screenshot":
    if os.name!="nt":return self.send_json(400,{"error":"Captura de tela disponível nesta versão para Windows."})
    try:
