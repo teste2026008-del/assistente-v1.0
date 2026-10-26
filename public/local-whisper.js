@@ -129,7 +129,11 @@ async function transcribe(samples, rate, thisSession) {
     if (!active || thisSession !== session) return;
     // O estado pode ter mudado enquanto o modelo estava transcrevendo.
     if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) return;
-    const heard = String(result?.text || '').trim();
+    let heard = String(result?.text || '').trim();
+    const normalizedHeard = normalize(heard);
+    if (/\bmarilha mendonca\b|\bmarilha mendunca\b|\bmarilha mendoza\b|\bmarilia mendunca\b|\bmarilia mendoza\b/.test(normalizedHeard)) {
+      heard = heard.replace(/mar[ií]l(?:ia|ha)\s+men(?:donça|donca|dunça|dunca|doza)/i, 'Marília Mendonça');
+    }
     // Corrige confusões recorrentes do Whisper em comandos em português brasileiro.
     let clean = normalize(heard);
     const corrections = [
@@ -298,7 +302,7 @@ async function startLocal() {
     await audioContext.resume();
     source = audioContext.createMediaStreamSource(stream);
     // Blocos menores reduzem a latência e deixam o detector de pausa mais preciso.
-    processor = audioContext.createScriptProcessor(4096, 1, 1);
+    processor = audioContext.createScriptProcessor(2048, 1, 1);
     pending = [];
     preRoll = [];
     sampleCount = 0;
@@ -317,7 +321,7 @@ async function startLocal() {
         framePeak = Math.max(framePeak, Math.abs(value));
       }
       const rms = Math.sqrt(sumSquares / Math.max(1, channel.length));
-      const voiceNow = rms >= 0.0048 && framePeak >= 0.014;
+      const voiceNow = rms >= 0.0035 && framePeak >= 0.010;
 
       if (Date.now() < commandCooldownUntil || window.localAssistantSpeaking || window.localAssistantBusy) {
         pending = [];
@@ -354,10 +358,10 @@ async function startLocal() {
         } else {
           // Buffer circular curto para preservar o começo da palavra sem acumular silêncio.
           preRoll.push(new Float32Array(channel));
-          if (preRoll.length > 5) preRoll.shift();
+          if (preRoll.length > 8) preRoll.shift();
         }
 
-        // ~0,7 s de silêncio encerra a frase. O tamanho mínimo evita transcrever cliques.
+        // ~0,55 s de silêncio encerra a frase. O tamanho mínimo evita transcrever cliques.
         const endedBySilence = capturingSpeech && speechFrames >= 4 && silenceFrames >= 12;
         const reachedLimit = capturingSpeech && sampleCount >= audioContext.sampleRate * 12;
         if ((endedBySilence || reachedLimit) && !transcribing) {
