@@ -8,7 +8,8 @@ Assistente de programação em português brasileiro, com interface de conversa,
 - Captura de voz pelo reconhecimento de fala do navegador (quando suportado).
 - Leitura das respostas com a síntese de voz do navegador.
 - Endpoint `/api/chat` em `src/index.js`, preparado para Cloudflare Workers AI.
-- A integração com GitHub e Cloudflare para executar alterações em projetos ainda não está implementada.
+- O agente local pode abrir uma janela própria de navegador com Playwright, navegar, ler conteúdo, clicar em links, preencher campos e baixar arquivos oferecidos por uma página.
+- Downloads por link HTTP/HTTPS direto vão para pastas conhecidas do usuário, sem sobrescrever arquivos existentes.
 
 ## Executar localmente no Windows
 
@@ -19,7 +20,7 @@ Assistente de programação em português brasileiro, com interface de conversa,
 5. Para atualizar arquivos sem baixar outro ZIP, execute `ATUALIZAR-SEXTA-FEIRA.ps1` no PowerShell depois que o repositório estiver público. O script cria um backup antes de substituir os arquivos.
 6. O Whisper usa o cache do navegador/WebView quando disponível. Na primeira utilização, o modelo pode precisar ser baixado.
 
-Comandos locais: abrir navegador/link, pesquisar na web, abrir aplicativos básicos e pastas comuns, listar pastas, consultar informações do computador e status/histórico do Git, criar notas. Não executa comandos arbitrários nem ações destrutivas. Controle geral de mouse/teclado e integração autenticada para alterar projetos no GitHub/Cloudflare ainda exigem desenvolvimento e testes adicionais.
+Comandos locais: abrir sites, pesquisar na web, abrir aplicativos e pastas conhecidas, listar pastas, consultar informações do computador, controlar uma janela de navegador isolada, baixar arquivos por link direto ou por link visível na página, consultar Git e criar notas. Não executa comandos arbitrários nem abre ou executa automaticamente arquivos baixados. O navegador controlável usa um perfil separado; ele não assume a sessão já aberta do Chrome/Edge. Para links que exigem login, captcha ou confirmação, o usuário pode precisar concluir a etapa no navegador.
 
 ## Publicar no Cloudflare Workers
 
