@@ -43,7 +43,7 @@ body:after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opaci
 const $=id=>document.getElementById(id);let recognition=null,listening=false,busy=false,wakeEnabled=false,awaitingCommand=false,speechPlaying=false,restartTimer=null;
 const localMode=location.hostname==='127.0.0.1'||location.hostname==='localhost';
 let memoryFacts=[],memoryHistory=[],memoryReady=false;
-async function loadPersistentMemory(){memoryFacts=[];memoryHistory=[];memoryReady=true;if(localMode){try{await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({facts:[],history:[]})})}catch(e){console.warn('Não foi possível limpar a memória antiga',e)}}}
+async function loadPersistentMemory(){memoryFacts=[];memoryHistory=[];memoryReady=true;try{['sextaLastSafeOpen','sextaPendingMusic','sextaLastMusicQuery','sextaLastApp'].forEach(k=>localStorage.removeItem(k))}catch{}if(localMode){try{await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({facts:[],history:[]})})}catch(e){console.warn('Não foi possível limpar a memória antiga',e)}}}
 async function savePersistentMemory(){memoryFacts=[];memoryHistory=[]}
 function buildContextualMessage(question){return question}
 loadPersistentMemory();
@@ -194,7 +194,7 @@ async function tryLocalAction(text){
    return best;
  }
  // Retoma uma tentativa recente de app quando a fala indica que ela não abriu.
- const previousApp=localStorage.getItem('sextaLastSafeOpen');
+ const previousApp=null;
  const reportsFailedOpen=/^(?:nao abriu|nao abriu ainda|ainda nao abriu|nao esta aberto|nao esta aberta|nao ta aberto|nao ta aberta|continua fechado|continua fechada|nao funcionou|nao executou)[.! ]*$/i.test(s);
  const likelyCalculatorFailure=previousApp==='calculadora'&&/^ainda\b/i.test(s)&&/\bcalcul\w*/i.test(s);
  if((reportsFailedOpen||likelyCalculatorFailure)&&previousApp&&appAliases.some(item=>item.name===previousApp)){
@@ -215,7 +215,7 @@ async function tryLocalAction(text){
    q=q.replace(/[.,!?;:]+/g,' ').replace(/\s+/g,' ').trim();
    if(!q || /^(?:e|qualquer|uma|um)$/i.test(norm(q)))q=musicGeneric;
    action={type:'music_play',query:q};
-   localStorage.setItem('sextaPendingMusic','1');
+   localStorage.setItem('sextaPendingMusic','0');
  }
  if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:(?:abre|abra|abrir|vai|vá|acesse|acessa|acessar)\s+)?(?:o\s+)?(?:youtube|youtube\.com)(?:\s+e)?\s+(?:(?:bota|coloca|coloque|toca|toque|reproduz|reproduza|abre|abrir|procura|procure|pesquisa|pesquise|busca|busque)\s+)?(.+)$/i))){
    let q=m[1].trim();
@@ -224,14 +224,14 @@ async function tryLocalAction(text){
    q=q.replace(/^(?:uma musica|musica|musicas|um video|video)\s+(?:do|da|de|com)\s+/i,'');
    if(/^(?:qualquer musica|uma musica qualquer|alguma musica|musica|musicas|um video|video|qualquer video)$/i.test(q))q=musicGeneric;
    action={type:'music_play',query:q||musicGeneric};
-   localStorage.setItem('sextaPendingMusic','1');
+   localStorage.setItem('sextaPendingMusic','0');
  }
  else if((m=original.match(/^(?:sexta[- ]feira[, ]*)?(?:coloca|coloque|toca|toque|bota|ponha|reproduz|reproduza|quero ouvir|quero escutar|põe|poe)\s+(.+)$/i))){
    let q=m[1].trim().replace(/^(?:qualquer musica|uma musica qualquer|alguma musica)$/i,musicGeneric);
    q=q.replace(/^(?:musica|musicas|video|videos)\s+(?:do|da|de|com)\s+/i,'');
    if(/^(?:qualquer musica|uma musica qualquer|alguma musica|musica|musicas)$/i.test(q))q=musicGeneric;
    action={type:'music_play',query:q||musicGeneric};
-   localStorage.setItem('sextaPendingMusic','1');
+   localStorage.setItem('sextaPendingMusic','0');
  }
  else if(localStorage.getItem('sextaPendingMusic')==='1' && /^(?:qualquer uma dela|uma qualquer dela|pode ser qualquer uma dela)$/.test(s) && localStorage.getItem('sextaLastMusicQuery')){
    action={type:'music_play',query:localStorage.getItem('sextaLastMusicQuery')};
@@ -248,7 +248,7 @@ async function tryLocalAction(text){
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?youtube\s+(?:e\s+)?(?:toque|toca|coloque|coloca|reproduza|reproduzir|procure|pesquise|busque)\s+(.+)$/i)))action={type:'music_play',query:m[1].replace(/^(?:uma?\s+)?musica\s+(?:do|da|de)\s+/i,'')};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar|mata|finaliza|finalize)\s+(?:completamente\s+)?(?:(?:o|a)\s+)?(?:(?:aplicativo|programa|janela)\s+(?:da|do|de)\s+)?(.+?)(?:\s+(?:completamente|totalmente|de vez|por completo))?$/i))){
    let target=m[1].replace(/^(?:o|a|meu|minha)\s+/,'').trim();
-   if(/^(?:aplicativo|programa|janela|app)$/i.test(target))target=localStorage.getItem('sextaLastApp')||'';
+   if(/^(?:aplicativo|programa|janela|app)$/i.test(target))target='';
    let app=findApp(target);
    if(!app&&/^(?:aplicativo|programa|app|janela)(?:\s+(?:total|totalmente|completamente|de vez|por completo))?$/.test(target)){
      app=localStorage.getItem('sextaLastApp')||'';
@@ -352,10 +352,10 @@ async function tryLocalAction(text){
    localStorage.setItem('sextaPendingMusic','0');
  }
  if(!action)return null;
- if(action.type==="open_app")localStorage.setItem('sextaLastSafeOpen',action.name);
- if(action.type==="music_play" && action.query && !/^músicas populares brasileiras$/i.test(action.query)){localStorage.setItem("sextaLastMusicQuery",action.query);localStorage.setItem("sextaPendingMusic",followup?"0":"1");}
+ 
+ if(action.type==="music_play" && action.query && !/^músicas populares brasileiras$/i.test(action.query)){localStorage.setItem("sextaPendingMusic","0");}
  if(action.type==="music_embed"){localStorage.setItem("sextaPendingMusic","0");showLocalMedia({video_url:action.video_url,title:action.title});return "Abri no player da Sexta-Feira. Se a reprodução automática for bloqueada, toque no botão de reproduzir."; }
- if(action.type==="open_app"||action.type==="close_app")localStorage.setItem("sextaLastApp",action.name);
+ 
  try{const r=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(action)});const d=await r.json();if(!r.ok)return 'Não consegui executar: '+(d.error||r.statusText);showLocalMedia(d);return d.message||'Comando concluído.'}
  catch(e){return 'Não consegui acessar o agente local: '+(e.message||e)}
 }
