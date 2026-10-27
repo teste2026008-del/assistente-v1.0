@@ -148,17 +148,25 @@ async function transcribe(samples, rate, thisSession) {
     }
     // Corrige confusões recorrentes do Whisper em comandos em português brasileiro.
     let clean = normalize(heard);
+    let correctionApplied = false;
     const corrections = [
-      [/\\bsexta feira\\b/g, 'sexta feira'],
-      [/\\bsexto ver\\b/g, 'sexta feira'],
-      [/\\bsexta feir\\b/g, 'sexta feira'],
-      [/\\bcauculadora|cauculadoura|calculadoura\\b/g, 'calculadora'],
-      [/\\bbloco das notas\\b/g, 'bloco de notas'],
-      [/\\bgoogle maps?\\b/g, 'google maps'],
-      [/\\bwhat?s ?app\\b/g, 'whatsapp'],
-      [/\\bpor cento\\b/g, 'por cento']
+      [/\b(?:laca|lacar|raca|racar|placa)\s+do\s+jogo\b/g, 'placar do jogo'],
+      [/\bcalculador\b/g, 'calculadora'],
+      [/\b(?:cauculadora|cauculadoura|calculadoura|caculadora|calcadora)\b/g, 'calculadora'],
+      [/\bsexta feir\b/g, 'sexta feira'],
+      [/\bsexto ver\b/g, 'sexta feira'],
+      [/\bbloco das notas\b/g, 'bloco de notas'],
+      [/\bgoogle maps?\b/g, 'google maps'],
+      [/\bwhat?s ?app\b/g, 'whatsapp'],
+      [/\bpor cento\b/g, 'por cento']
     ];
-    for (const [pattern, value] of corrections) clean = clean.replace(pattern, value);
+    for (const [pattern, value] of corrections) {
+      const corrected = clean.replace(pattern, value);
+      if (corrected !== clean) correctionApplied = true;
+      clean = corrected;
+    }
+    // Encaminha a versão corrigida ao roteador local e à IA; antes, só a validação usava essa forma.
+    if (correctionApplied) heard = clean;
     const hint = $('hint');
 
     if (!clean) return;
