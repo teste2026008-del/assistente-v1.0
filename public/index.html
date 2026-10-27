@@ -342,6 +342,15 @@ async function tryLocalAction(text){
  }
  const youtubeVideoMatch=original.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i);
  if(youtubeVideoMatch)action={type:'music_embed',video_url:'https://www.youtube-nocookie.com/embed/'+youtubeVideoMatch[1]+'?autoplay=1&playsinline=1',title:'Vídeo do YouTube'};
+ const ironManMention=/\b(?:homem de ferro|iron man|tum turum(?: turum)?)\b/.test(s);
+ if(ironManMention && /\b(?:memoria|memoriza|memorize|guarda|guarde|salva|salve)\b/.test(s)){
+   localStorage.setItem('sextaPendingMusic','0');
+   return 'Anotei: “Homem de Ferro” ou “tum turum turum” é Iron Man, do Black Sabbath. Quando quiser, diga “toca aquela tum turum turum”.';
+ }
+ if(ironManMention && /\b(?:toca|toque|tocar|coloca|coloque|reproduz|reproduza|reproduzir|bota|botar|ouvir|escutar)\b/.test(s)){
+   action={type:'music_embed',video_url:'https://www.youtube-nocookie.com/embed/7-thChxjcVw?autoplay=1&playsinline=1',title:'Iron Man — Black Sabbath (ao vivo oficial)'};
+   localStorage.setItem('sextaPendingMusic','0');
+ }
  if(!action)return null;
  if(action.type==="open_app")localStorage.setItem('sextaLastSafeOpen',action.name);
  if(action.type==="music_play" && action.query && !/^músicas populares brasileiras$/i.test(action.query)){localStorage.setItem("sextaLastMusicQuery",action.query);localStorage.setItem("sextaPendingMusic",followup?"0":"1");}
