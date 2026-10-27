@@ -189,10 +189,12 @@ async function tryLocalAction(text){
    // Evita disparar aplicativos por palavras soltas; exige verbo de ação antes do nome.
    return best;
  }
- // Um "não abriu"/"não está aberto" retoma e tenta de novo o último app permitido.
- if(/^(?:nao abriu|nao abriu ainda|ainda nao abriu|nao esta aberto|nao esta aberta|nao ta aberto|nao ta aberta|continua fechado|continua fechada|nao funcionou|nao executou)[.! ]*$/i.test(s)){
-   const previousApp=localStorage.getItem('sextaLastSafeOpen');
-   if(previousApp&&appAliases.some(item=>item.name===previousApp))action={type:'open_app',name:previousApp};
+ // Retoma uma tentativa recente de app quando a fala indica que ela não abriu.
+ const previousApp=localStorage.getItem('sextaLastSafeOpen');
+ const reportsFailedOpen=/^(?:nao abriu|nao abriu ainda|ainda nao abriu|nao esta aberto|nao esta aberta|nao ta aberto|nao ta aberta|continua fechado|continua fechada|nao funcionou|nao executou)[.! ]*$/i.test(s);
+ const likelyCalculatorFailure=previousApp==='calculadora'&&/^ainda\b/i.test(s)&&/\bcalcul\w*/i.test(s);
+ if((reportsFailedOpen||likelyCalculatorFailure)&&previousApp&&appAliases.some(item=>item.name===previousApp)){
+   action={type:'open_app',name:previousApp};
  }
  // Comandos diretos e frases compostas: priorizar ações reais antes da conversa genérica.
  // Música fica no app: procura faixas locais e usa o player integrado.
