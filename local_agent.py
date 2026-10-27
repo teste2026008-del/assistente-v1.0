@@ -645,18 +645,18 @@ class Handler(SimpleHTTPRequestHandler):
    if not cmd:return self.send_json(400,{"error":"Aplicativo não permitido. Posso abrir apenas programas da lista segura."})
    try:
     if name=="calculadora":
-     # Tenta primeiro o URI oficial e depois os caminhos de inicialização do Windows.
+     # O alias do Windows inicia a Calculadora do sistema; o URI fica como reserva.
      try:
-      os.startfile("calculator:")
+      subprocess.Popen(["calc.exe"],shell=False)
      except Exception:
-      try:subprocess.Popen(["calc.exe"],shell=False)
+      try:os.startfile("calculator:")
       except Exception:subprocess.Popen(["cmd.exe","/c","start","","calculator:"],shell=False)
     elif name in ("opera","opera gx"):
      # O comando start permite que o Windows resolva a instalação/registro do navegador.
      subprocess.Popen(cmd,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
     else:subprocess.Popen(cmd,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
    except Exception as e:return self.send_json(500,{"error":"Não consegui abrir o aplicativo: "+str(e)[:150]})
-   return self.send_json(200,{"message":"Solicitei ao Windows que abra "+name+"."})
+   return self.send_json(200,{"message":"Abri a "+name+"." if name=="calculadora" else "Abri "+name+"."})
   if k=="weather":
    city=str(d.get("city","")).strip()[:120]
    if not city:return self.send_json(400,{"error":"Diga a cidade. Por exemplo: 'como está o tempo em Goiânia?'."})
