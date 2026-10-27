@@ -533,7 +533,8 @@ class Handler(SimpleHTTPRequestHandler):
    query=str(d.get("query","")).strip()[:160]
    wanted=normalize_key(query)
    # O apelido do tema é resolvido antes da busca de arquivos locais.
-   iron_man_alias=("homem de ferro" in wanted or "iron man" in wanted or re.search(r"\btum+\s+turum+(?:\s+turum+)?\b",wanted))
+   iron_man_scan=re.sub(r"[^a-z0-9]+"," ",wanted).strip()
+   iron_man_alias=("homem de ferro" in iron_man_scan or "iron man" in iron_man_scan or re.search(r"\btum+\s+turum+(?:\s+turum+)?\b",iron_man_scan))
    if iron_man_alias:
     return self.send_json(200,{"message":"Encontrei Iron Man, do Black Sabbath, e abri no player da Sexta-Feira.","title":"Iron Man — Black Sabbath (ao vivo oficial)","video_url":"https://www.youtube-nocookie.com/embed/7-thChxjcVw?autoplay=1&playsinline=1"})
    roots=[Path.home()/"Music",Path.home()/"Downloads"]
