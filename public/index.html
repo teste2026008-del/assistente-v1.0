@@ -136,7 +136,7 @@ async function tryLocalAction(text){
  original=original.replace(/\babrei\s+(?:a\s+)?calculadoras?\b/gi,'abre a calculadora')
   .replace(/\b(?:abre|abrir)\s+me\s+(?:a\s+)?calculadora\b/gi,'abre a calculadora')
   .replace(/\binc[oó]cula\s+dura\b/gi,'calculadora')
-  .replace(/\b(?:seata|seata-feira|sexta feir|sexto ver)\b/gi,'sexta-feira');
+  .replace(/\b(?:seata\s+feira|seata-feira|seata|sexta feir|sexto ver)\b/gi,'sexta-feira');
  const norm=v=>String(v||'').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.,!?;:]/g,' ').replace(/\s+/g,' ').trim();
  const s=norm(original);let action=null;let m;
  const prefix='(?:sexta feira[, ]*)?';
