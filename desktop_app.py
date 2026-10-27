@@ -149,78 +149,54 @@ def check_and_apply_updates():
         logging.warning("Atualização automática indisponível; abrindo versão local: %s", exc)
 
 def check_web_updates():
-    """Atualiza apenas arquivos web em segundo plano; nunca sobrescreve Python em execução."""
+    """Aplica o estado completo da versão atual e reinicia somente se o núcleo mudou."""
     try:
         info = json.loads(_download(GITHUB_API))
         latest_sha = str(info.get("sha", "")).strip()
         if len(latest_sha) != 40:
             raise RuntimeError("SHA inválido recebido do GitHub")
+
         state_path = LOG_DIR / "web-update-state.json"
         try:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
+            web_state = json.loads(state_path.read_text(encoding="utf-8"))
         except Exception:
-            state = {}
-        if state.get("commit") == latest_sha:
+            web_state = {}
+        if web_state.get("commit") == latest_sha:
             return
-        files = info.get("files") or []
-        runtime_changed = any(str(item.get("filename", "")).endswith(".py") for item in files)
-        if runtime_changed:
-            try:
-                previous_core = json.loads(UPDATE_STATE.read_text(encoding="utf-8"))
-            except Exception:
-                previous_core = {}
-            previous_core_commit = str(previous_core.get("commit", ""))
-            check_and_apply_updates()
-            try:
-                installed_core = json.loads(UPDATE_STATE.read_text(encoding="utf-8"))
-            except Exception:
-                installed_core = {}
-            if installed_core.get("commit") != latest_sha:
-                raise RuntimeError("A atualização do núcleo não foi aplicada por completo")
-            changed_core_files = installed_core.get("files") or []
-            core_updated = (
-                previous_core_commit != latest_sha
-                and any(str(path).endswith(".py") for path in changed_core_files)
-            )
-            state_path.write_text(json.dumps({
-                "commit": latest_sha,
-                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "updated_files": changed_core_files,
-                "restart_required": core_updated,
-            }, indent=2), encoding="utf-8")
-            logging.info("Atualização do núcleo verificada; arquivos: %s; reinício necessário: %s",
-                         changed_core_files, core_updated)
-            if core_updated:
-                restart_application()
-            return
-        updated = []
-        for relative in ("public/index.html", "public/local-whisper.js"):
-            data = _download(f"{RAW_BASE}/{latest_sha}/{relative}?v={latest_sha}")
-            if not _file_is_valid(relative, data):
-                raise RuntimeError(f"Arquivo web inválido: {relative}")
-            target = ROOT / relative
-            if target.exists() and target.read_bytes() == data:
-                continue
-            backup_dir = BACKUP_ROOT / ("web-" + time.strftime("%Y%m%d-%H%M%S"))
-            if target.exists():
-                backup = backup_dir / relative
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(target, backup)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            temp = target.with_name(target.name + ".web-update-tmp")
-            temp.write_bytes(data)
-            os.replace(temp, target)
-            updated.append(relative)
+
+        try:
+            previous_core = json.loads(UPDATE_STATE.read_text(encoding="utf-8"))
+        except Exception:
+            previous_core = {}
+        previous_core_commit = str(previous_core.get("commit", ""))
+
+        # Consulta todos os arquivos permitidos no commit atual. Assim, uma atualização
+        # do núcleo não se perde quando commits web posteriores vêm depois dela.
+        check_and_apply_updates()
+        try:
+            installed_core = json.loads(UPDATE_STATE.read_text(encoding="utf-8"))
+        except Exception:
+            installed_core = {}
+        if installed_core.get("commit") != latest_sha:
+            raise RuntimeError("A versão atual não foi aplicada por completo")
+
+        changed_files = installed_core.get("files") or []
+        core_updated = (
+            previous_core_commit != latest_sha
+            and any(str(path).endswith(".py") for path in changed_files)
+        )
         state_path.write_text(json.dumps({
             "commit": latest_sha,
             "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "updated_files": updated,
-            "restart_required": runtime_changed,
+            "updated_files": changed_files,
+            "restart_required": core_updated,
         }, indent=2), encoding="utf-8")
-        logging.info("Verificação em segundo plano concluída; arquivos web atualizados: %s; reinício Python necessário: %s",
-                     updated, runtime_changed)
+        logging.info("Verificação em segundo plano concluída; arquivos atualizados: %s; reinício do núcleo necessário: %s",
+                     changed_files, core_updated)
+        if core_updated:
+            restart_application()
     except Exception:
-        logging.exception("Falha ao verificar/aplicar atualização web em segundo plano")
+        logging.exception("Falha ao verificar/aplicar atualização em segundo plano")
 
 def restart_application():
     """Abre a versão atualizada e encerra esta instância para reiniciar o aplicativo."""
