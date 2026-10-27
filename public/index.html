@@ -93,10 +93,33 @@ async function readStreamedReply(response){
 }
 function chooseVoice(){const vs=window.speechSynthesis.getVoices();const pt=vs.filter(x=>/^pt-BR/i.test(x.lang));const preferred=[/Francisca.*Natural/i,/Microsoft Francisca/i,/Francisca/i,/Microsoft.*Female.*Portugu/i,/Google.*portugu[eê]s.*Brasil/i,/portugu[eê]s.*Brasil.*Female/i,/Maria.*pt-BR/i,/Camila.*pt-BR/i,/female.*pt-BR/i];for(const pattern of preferred){const v=pt.find(x=>pattern.test(x.name))||vs.find(x=>pattern.test(x.name+' '+x.lang)&&/^pt/i.test(x.lang));if(v)return v}return pt.find(x=>!/Antonio|Daniel|Andr[eé]|Felipe|Ricardo|Paulo/i.test(x.name))||pt[0]||vs.find(x=>/^pt/i.test(x.lang))||null}
 let currentAudio=null;let currentUtterance=null;
+let speechAudioContext=null,currentSpeechSource=null;
+function primeSpeechAudio(){
+ try{
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextClass)return;
+  if(!speechAudioContext)speechAudioContext=new AudioContextClass();
+  if(speechAudioContext.state==='suspended')speechAudioContext.resume().catch(()=>{});
+  const silence=speechAudioContext.createBuffer(1,1,speechAudioContext.sampleRate);
+  const source=speechAudioContext.createBufferSource();source.buffer=silence;source.connect(speechAudioContext.destination);source.start(0);
+ }catch(error){console.debug('Pré-ativação de áudio indisponível:',error)}
+}
+async function playBufferedSpeech(blob,voiceName){
+ const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+ if(!AudioContextClass)throw new Error('Áudio Web não está disponível neste navegador.');
+ if(!speechAudioContext)speechAudioContext=new AudioContextClass();
+ if(speechAudioContext.state==='suspended')await speechAudioContext.resume();
+ const bytes=await blob.arrayBuffer();
+ const buffer=await speechAudioContext.decodeAudioData(bytes);
+ const source=speechAudioContext.createBufferSource();source.buffer=buffer;source.connect(speechAudioContext.destination);currentSpeechSource=source;
+ source.onended=()=>{if(currentSpeechSource!==source)return;currentSpeechSource=null;finishSpeech()};
+ setState('FALANDO');$('hint').textContent=(voiceName||'Voz neural')+' • PORTUGUÊS BRASILEIRO';
+ source.start(0);
+}
 function finishSpeech(){speechPlaying=false;window.localAssistantSpeaking=false;window.localAssistantBusy=false;setState(wakeEnabled?'AGUARDANDO SEXTA-FEIRA':'SISTEMA PRONTO');if(wakeEnabled){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,650)}}
 function speakLocal(text){return new Promise((resolve,reject)=>{if(!('speechSynthesis'in window)||!('SpeechSynthesisUtterance'in window)){reject(new Error('A voz local não está disponível neste navegador.'));return}try{window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(String(text||''));utterance.lang='pt-BR';utterance.rate=1.08;utterance.pitch=1.08;utterance.volume=1;const voice=chooseVoice();if(voice)utterance.voice=voice;currentUtterance=utterance;utterance.onstart=()=>{setState('FALANDO');$('hint').textContent='VOZ LOCAL DO WINDOWS • PORTUGUÊS BRASILEIRO'};utterance.onend=()=>{currentUtterance=null;finishSpeech();resolve()};utterance.onerror=(event)=>{currentUtterance=null;finishSpeech();reject(new Error(event.error==='not-allowed'?'O navegador bloqueou a voz local. Clique na tela e tente novamente.':'Não foi possível reproduzir a voz local.'))};window.speechSynthesis.speak(utterance)}catch(error){reject(error)}})}
 async function fallbackVoice(text,reason){if(currentAudio){currentAudio.pause();currentAudio=null}if('speechSynthesis'in window)window.speechSynthesis.cancel();$('hint').textContent='Voz neural indisponível; tentando voz de reserva.';try{await speakLocal(text)}catch(localError){console.error('Falha também na voz local:',localError);speechPlaying=false;window.localAssistantSpeaking=false;window.localAssistantBusy=false;setState('VOZ INDISPONÍVEL');$('hint').textContent='Não foi possível gerar áudio online nem local. '+(localError?.message||'Ative uma voz em português nas configurações do Windows.');if(wakeEnabled){clearTimeout(restartTimer);restartTimer=setTimeout(startWakeListening,900)}}}
-async function speak(text){speechPlaying=true;window.localAssistantSpeaking=true;window.localAssistantBusy=true;if(currentAudio){currentAudio.pause();currentAudio=null}if('speechSynthesis'in window)window.speechSynthesis.cancel();setState('PREPARANDO VOZ');$('hint').textContent='PREPARANDO VOZ NEURAL BRASILEIRA • FRANCISCA';try{const response=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:String(text||'').slice(0,1800)})});if(!response.ok){let message='Serviço de voz neural indisponível ('+response.status+').';try{const data=await response.json();message=data.error||message;if(data.detail)message+=' ('+String(data.detail).slice(0,220)+')'}catch{}throw new Error(message)}const blob=await response.blob();if(!blob.size)throw new Error('A voz online retornou áudio vazio.');const url=URL.createObjectURL(blob);const audio=new Audio(url);currentAudio=audio;audio.volume=1;audio.onplay=()=>{setState('FALANDO');$('hint').textContent=(response.headers.get('X-Voice-Name')|| (blob.type.includes('wav')?'Kokoro Dora (reserva local)':'Francisca Neural'))+' • PORTUGUÊS BRASILEIRO'};audio.onended=()=>{URL.revokeObjectURL(url);currentAudio=null;finishSpeech()};audio.onerror=()=>{URL.revokeObjectURL(url);currentAudio=null;fallbackVoice(text,'erro ao reproduzir áudio')};await audio.play()}catch(error){console.warn('Voz online indisponível; ativando fallback local:',error);await fallbackVoice(text,error?.message||'erro no serviço online')}}function acknowledgeWakePhrase(){
+async function speak(text){speechPlaying=true;window.localAssistantSpeaking=true;window.localAssistantBusy=true;if(currentAudio){currentAudio.pause();currentAudio=null}if('speechSynthesis'in window)window.speechSynthesis.cancel();setState('PREPARANDO VOZ');$('hint').textContent='PREPARANDO VOZ NEURAL BRASILEIRA • FRANCISCA';try{const response=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:String(text||'').slice(0,1800)})});if(!response.ok){let message='Serviço de voz neural indisponível ('+response.status+').';try{const data=await response.json();message=data.error||message;if(data.detail)message+=' ('+String(data.detail).slice(0,220)+')'}catch{}throw new Error(message)}const blob=await response.blob();if(!blob.size)throw new Error('A voz online retornou áudio vazio.');const url=URL.createObjectURL(blob);const audio=new Audio(url);currentAudio=audio;audio.volume=1;audio.onplay=()=>{setState('FALANDO');$('hint').textContent=(response.headers.get('X-Voice-Name')|| (blob.type.includes('wav')?'Kokoro Dora (reserva local)':'Francisca Neural'))+' • PORTUGUÊS BRASILEIRO'};audio.onended=()=>{URL.revokeObjectURL(url);currentAudio=null;finishSpeech()};audio.onerror=()=>{URL.revokeObjectURL(url);currentAudio=null;fallbackVoice(text,'erro ao reproduzir áudio')};try{await audio.play()}catch(playError){URL.revokeObjectURL(url);currentAudio=null;await playBufferedSpeech(blob,response.headers.get('X-Voice-Name')||(blob.type.includes('wav')?'Kokoro Dora (reserva local)':'Francisca Neural'))}}catch(error){console.warn('Reprodução neural direta falhou; tentando áudio compatível:',error);await fallbackVoice(text,error?.message||'erro ao reproduzir áudio')}}function acknowledgeWakePhrase(){
  const answer='ESTOU AQUI, O QUE O SENHOR DESEJA?';
  bubble('SEXTA-FEIRA',answer);showLast('SEXTA-FEIRA',answer);speak(answer);
 }
@@ -108,7 +131,7 @@ if(rememberMatch){memoryFacts=[];memoryHistory=[];const answer='A memória está
 if(localMode&&/^(?:apague|limpe|esqueça|apagar|limpar) (?:toda a )?(?:minha |sua )?memória(?: da sexta-feira)?[.! ]*$/i.test(text)){memoryFacts=[];memoryHistory=[];await savePersistentMemory();const answer='Apaguei as memórias e o histórico persistente salvos neste computador.';bubble('VOCÊ',text);showLast('VOCÊ',text);bubble('SEXTA-FEIRA',answer);showLast('SEXTA-FEIRA',answer);speak(answer);return}
 if(localMode){const local=await tryLocalAction(text);if(local){memoryHistory.push({role:'user',text});memoryHistory.push({role:'assistant',text:local});memoryHistory=memoryHistory.slice(-12);await savePersistentMemory();window.localAssistantBusy=true;bubble('VOCÊ',text);showLast('VOCÊ',text);bubble('SEXTA-FEIRA',local);showLast('SEXTA-FEIRA',local);speak(local);return}}
 const contextualMessage=buildContextualMessage(text);if(localMode){memoryHistory.push({role:'user',text});memoryHistory=memoryHistory.slice(-12);await savePersistentMemory()}busy=true;window.localAssistantBusy=true;bubble('VOCÊ',text);showLast('VOCÊ',text);$('prompt').value='';$('send').disabled=true;setState('PENSANDO');try{const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:contextualMessage,latest:text,stream:true})});let data={};if(!res.ok){try{data=await res.json()}catch{}throw new Error([data.error,data.detail].filter(Boolean).join(' — ')||'O serviço de IA não respondeu.')}let answer='';if((res.headers.get('content-type')||'').includes('text/event-stream')){answer=await readStreamedReply(res);if(!answer)throw new Error('A IA não enviou uma resposta.')}else{try{data=await res.json()}catch{}answer=data.reply||'Não recebi uma resposta válida.';bubble('SEXTA-FEIRA',answer);showLast('SEXTA-FEIRA',answer)}if(localMode){memoryHistory.push({role:'assistant',text:answer});memoryHistory=memoryHistory.slice(-12);await savePersistentMemory()}speak(answer)}catch(e){const msg=e.message||'Falha de conexão com o servidor.';$('hint').textContent='Erro ao responder: '+msg;bubble('SISTEMA',msg);showLast('SISTEMA',msg);setState('VERIFIQUE A CONEXÃO')}finally{busy=false;window.localAssistantBusy=false;$('send').disabled=false}}
-$('form').addEventListener('submit',e=>{e.preventDefault();send($('prompt').value)});
+$('form').addEventListener('submit',e=>{e.preventDefault();primeSpeechAudio();send($('prompt').value)});
 function showLocalMedia(data){
  if(data.video_url){
   let panel=$('localVideoPanel');if(panel)panel.remove();
@@ -388,6 +411,7 @@ async function activateVoice(){
  setState('ERRO AO CARREGAR VOZ LOCAL');
 }
 $('mic').addEventListener('click',()=>{
+ primeSpeechAudio();
  if(typeof window.startLocalWhisper==='function'){
   if(window.localWhisperRunning&&typeof window.stopLocalWhisper==='function')window.stopLocalWhisper();
   else activateVoice();
@@ -402,6 +426,7 @@ $('stop').addEventListener('click',()=>{
  speechPlaying=false;
  if('speechSynthesis'in window)window.speechSynthesis.cancel();
  if(currentAudio){currentAudio.pause();currentAudio.currentTime=0;currentAudio=null}
+ if(currentSpeechSource){try{currentSpeechSource.stop()}catch{}currentSpeechSource=null}
  currentUtterance=null;setState('SISTEMA PRONTO');$('hint').textContent='ESCUTA PARADA';
 });
 $('historyToggle').addEventListener('click',()=>$('history').classList.toggle('open'));
