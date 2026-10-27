@@ -251,13 +251,13 @@ async function tryLocalAction(text){
    if(/^(?:aplicativo|programa|janela|app)$/i.test(target))target='';
    let app=findApp(target);
    if(!app&&/^(?:aplicativo|programa|app|janela)(?:\s+(?:total|totalmente|completamente|de vez|por completo))?$/.test(target)){
-     app=localStorage.getItem('sextaLastApp')||'';
+     app='';
    }
-   if(app){localStorage.setItem('sextaLastApp',app);action={type:'close_app',name:app}}
+   if(app){action={type:'close_app',name:app}}
  }
  else if(/^(?:sexta feira[, ]*)?(?:que horas sao|que hora sao|que horas e|que hora e|qual e a hora|me fala a hora|me diga a hora|horas agora|hora atual|qual o horario)[?!. ]*$/i.test(s))action={type:'current_time'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar)\s+(?:o\s+)?(?:aplicativo|programa|app|janela)(?:\s+(?:total|totalmente|completamente|de vez|por completo))?[!. ]*$/i))){
-   const previous=localStorage.getItem('sextaLastApp')||'';
+   const previous='';
    if(previous)action={type:'close_app',name:previous};
  }
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:meu\s+)?navegador\s+(?:e\s+)?(?:abre\s+(?:o\s+)?youtube\s+e\s+)?(?:toca|toque|coloca|coloque|bota|ponha|reproduz|reproduza)\s+(?:uma\s+)?musica(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'music_play',query:m[1]||'músicas populares brasileiras'};
@@ -265,7 +265,7 @@ async function tryLocalAction(text){
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:coloca|coloque|toca|toque|reproduz|reproduza|bota|ponha)\s+(?:uma\s+)?(?:musica|som)(?:\s+(?:do|da|de)\s+(.+))?$/i)))action={type:'music_play',query:m[1]||'músicas populares brasileiras'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|acesse|acessa|acessar)\s+(?:o\s+)?(?:youtube|youtube music)$/i)))action={type:'open_url',url:'https://www.youtube.com'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:fecha|feche|fechar|encerra|encerre|encerrar)\s+(?:o\s+)?(?:aplicativo|programa|app|janela)$/i))){
-   const previous=localStorage.getItem('sextaLastApp')||'';
+   const previous='';
    if(previous)action={type:'close_app',name:previous};
  }
  if(!action){
