@@ -138,6 +138,14 @@ async function tryLocalAction(text){
   .replace(/\b(?:seata\s+feira|seata-feira|seata|sexta feir|sexto ver)\b/gi,'sexta-feira');
  const norm=v=>String(v||'').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.,!?;:]/g,' ').replace(/\s+/g,' ').trim();
  const s=norm(original);let action=null;let m;
+ const ironManScan=s.replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+ const ironManMention=/\b(?:homem de ferro|iron man|tum turum(?: turum)?)\b/.test(ironManScan);
+ const ironManPlay=/\b(?:toca|toque|tocar|reproduz|reproduza|reproduzir|coloca|coloque|bota|botar|ouvir|escutar)\b/.test(s);
+ if(ironManMention&&ironManPlay){
+  localStorage.setItem('sextaPendingMusic','0');
+  showLocalMedia({video_url:'https://www.youtube-nocookie.com/embed/7-thChxjcVw?autoplay=1&playsinline=1',title:'Iron Man — Black Sabbath (ao vivo oficial)'});
+  return 'Reproduzindo Iron Man, do Black Sabbath.';
+ }
  const prefix='(?:sexta feira[, ]*)?';
  const verb='(?:abra|abre|abrir|inicie|inicia|iniciar|comece|comeca|começar|execute|executa|executar|rode|roda|rodar|lance|lança|lancar|acesse|acessa|acessar|entre em|entra em|entrar em|entre no|entra no|entrar no|vá para|vai para|ir para|inicie|iniciar)';
  const optional='(?:(?:a|o|as|os|minha|minhas|meu|meus|uma|um|me|do|da|dos|das) )?';
@@ -341,16 +349,7 @@ async function tryLocalAction(text){
  }
  const youtubeVideoMatch=original.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i);
  if(youtubeVideoMatch)action={type:'music_embed',video_url:'https://www.youtube-nocookie.com/embed/'+youtubeVideoMatch[1]+'?autoplay=1&playsinline=1',title:'Vídeo do YouTube'};
- const ironManScan=s.replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
- const ironManMention=/\b(?:homem de ferro|iron man|tum turum(?: turum)?)\b/.test(ironManScan);
- if(ironManMention && /\b(?:memoria|memoriza|memorize|guarda|guarde|salva|salve)\b/.test(s)){
-   localStorage.setItem('sextaPendingMusic','0');
-   return 'Anotei: “Homem de Ferro” ou “tum turum turum” é Iron Man, do Black Sabbath. Quando quiser, diga “toca aquela tum turum turum”.';
- }
- if(ironManMention && /\b(?:toca|toque|tocar|coloca|coloque|reproduz|reproduza|reproduzir|bota|botar|ouvir|escutar)\b/.test(s)){
-   action={type:'music_embed',video_url:'https://www.youtube-nocookie.com/embed/7-thChxjcVw?autoplay=1&playsinline=1',title:'Iron Man — Black Sabbath (ao vivo oficial)'};
-   localStorage.setItem('sextaPendingMusic','0');
- }
+
  if(!action)return null;
  
  if(action.type==="music_play" && action.query && !/^músicas populares brasileiras$/i.test(action.query)){localStorage.setItem("sextaPendingMusic","0");}
