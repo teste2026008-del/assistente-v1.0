@@ -131,12 +131,17 @@ function showLocalMedia(data){
  }
 }
 async function tryLocalAction(text){
- const original=String(text||'').trim().replace(/\byou\s*tube\b/gi,'youtube').replace(/\bo\s+tube\b/gi,'youtube');
+ let original=String(text||'').trim().replace(/\byou\s*tube\b/gi,'youtube').replace(/\bo\s+tube\b/gi,'youtube');
+ // Corrige trocas comuns do reconhecimento de voz antes do roteamento de comandos locais.
+ original=original.replace(/\babrei\s+(?:a\s+)?calculadoras?\b/gi,'abre a calculadora')
+  .replace(/\b(?:abre|abrir)\s+me\s+(?:a\s+)?calculadora\b/gi,'abre a calculadora')
+  .replace(/\b(?:incócula|incocula)\s+dura\b/gi,'calculadora')
+  .replace(/\b(?:seata|seata-feira|sexta feir|sexto ver)\b/gi,'sexta-feira');
  const norm=v=>String(v||'').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.,!?;:]/g,' ').replace(/\s+/g,' ').trim();
  const s=norm(original);let action=null;let m;
  const prefix='(?:sexta feira[, ]*)?';
  const verb='(?:abra|abre|abrir|inicie|inicia|iniciar|comece|comeca|começar|execute|executa|executar|rode|roda|rodar|lance|lança|lancar|acesse|acessa|acessar|entre em|entra em|entrar em|entre no|entra no|entrar no|vá para|vai para|ir para|inicie|iniciar)';
- const optional='(?:(?:a|o|as|os|minha|minhas|meu|meus|uma|um|do|da|dos|das) )?';
+ const optional='(?:(?:a|o|as|os|minha|minhas|meu|meus|uma|um|me|do|da|dos|das) )?';
  const editDistance=(a,b)=>{
    const prev=Array.from({length:b.length+1},(_,i)=>i);
    for(let i=1;i<=a.length;i++){
@@ -293,7 +298,7 @@ async function tryLocalAction(text){
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:toque|toca|tocar|coloque|coloca|colocar|reproduza|reproduzir|procure|procurar|pesquise|pesquisar|busque|buscar)\s+(?:a musica\s+|musica\s+)?(.+)$/i)))action={type:'music_play',query:m[1]};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:abra|abre|abrir)\s+(?:o )?(?:youtube|youtube music)$/i)))action={type:'open_url',url:'https://www.youtube.com'};
  else if((m=s.match(/^(?:sexta feira[, ]*)?(?:pesquise|pesquisar|procure|buscar|busque|pesquisa na internet)\s+(.+)$/i)))action={type:'web_search',query:m[1]};
- else if(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|inicie|iniciar|execute|executa|executar|rode|rodar)\s+(?:(?:a|o)\s+)?(?:(?:minha|minhas|meu|meus)\s+)?(?:calculadora|calculador|calc|cauculadora|cauculador|cauculadoura|calculadoura)(?:\s+(?:do windows|do computador|do pc))?$/i.test(s))action={type:'open_app',name:'calculadora'};
+ else if(/^(?:sexta feira[, ]*)?(?:abre|abra|abrir|inicie|iniciar|execute|executa|executar|rode|rodar)\s+(?:(?:a|o)\s+)?(?:(?:minha|minhas|meu|meus)\s+)?(?:calculadora|calculadoras|calculador|calculadora? do|calc|cauculadora|cauculador|cauculadoura|calculadoura)(?:\s+(?:do windows|do computador|do pc))?$/i.test(s))action={type:'open_app',name:'calculadora'};
  else if((m=s.match(new RegExp('^'+prefix+verb+' '+optional+'(?:pasta )?(downloads|documentos|area de trabalho|desktop|imagens|musicas|musica|videos|video)$','i'))))action={type:'open_folder',name:m[1]};
  else if((m=s.match(new RegExp('^'+prefix+verb+'\s+(.+)$','i')))){
    const target=m[1].replace(/^(?:a|o|as|os|minha|minhas|meu|meus|uma|um)\s+/,'').trim();
