@@ -157,6 +157,7 @@ async function transcribe(samples, rate, thisSession) {
       [/\bcalculador\b/g, 'calculadora'],
       [/\b(?:cauculadora|cauculadoura|calculadoura|caculadora|calcadora)\b/g, 'calculadora'],
       [/\bsexta feir\b/g, 'sexta feira'],
+      [/\bseata feira\b/g, 'sexta feira'],
       [/\bsexto ver\b/g, 'sexta feira'],
       [/\bbloco das notas\b/g, 'bloco de notas'],
       [/\bgoogle maps?\b/g, 'google maps'],
