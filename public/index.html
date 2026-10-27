@@ -342,7 +342,8 @@ async function tryLocalAction(text){
  }
  const youtubeVideoMatch=original.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i);
  if(youtubeVideoMatch)action={type:'music_embed',video_url:'https://www.youtube-nocookie.com/embed/'+youtubeVideoMatch[1]+'?autoplay=1&playsinline=1',title:'Vídeo do YouTube'};
- const ironManMention=/\b(?:homem de ferro|iron man|tum turum(?: turum)?)\b/.test(s);
+ const ironManScan=s.replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+ const ironManMention=/\b(?:homem de ferro|iron man|tum turum(?: turum)?)\b/.test(ironManScan);
  if(ironManMention && /\b(?:memoria|memoriza|memorize|guarda|guarde|salva|salve)\b/.test(s)){
    localStorage.setItem('sextaPendingMusic','0');
    return 'Anotei: “Homem de Ferro” ou “tum turum turum” é Iron Man, do Black Sabbath. Quando quiser, diga “toca aquela tum turum turum”.';
