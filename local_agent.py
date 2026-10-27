@@ -393,19 +393,14 @@ class Handler(SimpleHTTPRequestHandler):
   data.setdefault("facts",[]);data.setdefault("history",[])
   return data
  def memory_get(self):
-  data=self.memory_read()
-  return self.send_json(200,{"facts":data["facts"],"history":data["history"][-12:]})
+  try: MEMORY_FILE.unlink(missing_ok=True)
+  except OSError as e:return self.send_json(500,{"error":"Não consegui apagar a memória antiga: "+str(e)[:120]})
+  return self.send_json(200,{"facts":[],"history":[]})
  def memory_save(self,d):
-  facts=d.get("facts",[]);history=d.get("history",[])
-  if not isinstance(facts,list) or not isinstance(history,list):
-   return self.send_json(400,{"error":"Memória inválida."})
-  facts=[str(x).strip()[:500] for x in facts if str(x).strip()][:100]
-  history=[{"role":str(x.get("role",""))[:20],"text":str(x.get("text","")).strip()[:3000]} for x in history[-12:] if isinstance(x,dict) and str(x.get("text","")).strip()]
-  try:
-   MEMORY_FILE.write_text(json.dumps({"facts":facts,"history":history},ensure_ascii=False,indent=2),encoding="utf-8")
-  except OSError as e:
-   return self.send_json(500,{"error":"Não consegui salvar a memória local: "+str(e)[:160]})
-  return self.send_json(200,{"ok":True,"facts":len(facts),"history":len(history)})
+  # Memória de conversa desativada a pedido do usuário; elimina dados antigos e ignora novos.
+  try: MEMORY_FILE.unlink(missing_ok=True)
+  except OSError as e:return self.send_json(500,{"error":"Não consegui apagar a memória antiga: "+str(e)[:120]})
+  return self.send_json(200,{"ok":True,"count":0,"memory_disabled":True})
  def browser_action(self,d):
   global _BROWSER_PLAYWRIGHT,_BROWSER_CONTEXT,_BROWSER_PAGE
   kind=str(d.get("type",""))
