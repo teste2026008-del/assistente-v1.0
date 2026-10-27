@@ -151,6 +151,9 @@ async function transcribe(samples, rate, thisSession) {
     let correctionApplied = false;
     const corrections = [
       [/\b(?:laca|lacar|raca|racar|placa)\s+do\s+jogo\b/g, 'placar do jogo'],
+      [/\babrei\s+calculadoras?\b/g, 'abre a calculadora'],
+      [/\b(?:abre|abrir)\s+me\s+(?:a\s+)?calculadora\b/g, 'abre a calculadora'],
+      [/\binc[oó]cula\s+dura\b/g, 'calculadora'],
       [/\bcalculador\b/g, 'calculadora'],
       [/\b(?:cauculadora|cauculadoura|calculadoura|caculadora|calcadora)\b/g, 'calculadora'],
       [/\bsexta feir\b/g, 'sexta feira'],
